@@ -29,7 +29,7 @@ Usage:
   codex-workbench unarchive <session>
   codex-workbench hide <session>
   codex-workbench unhide <session>
-  codex-workbench delete <session> [--force]
+  codex-workbench delete <session> [--force] [--file]
 
 Environment:
   CODEX_HOME            default: ~/.codex
@@ -246,6 +246,18 @@ function updateMetadata(session, patch) {
   writeJson(META_PATH, meta);
 }
 
+function removeMetadata(session) {
+  const meta = loadMeta();
+  delete meta.sessions[session.id];
+  meta.updatedAt = new Date().toISOString();
+  writeJson(META_PATH, meta);
+}
+
+function deleteSessionFile(session) {
+  fs.unlinkSync(session.file);
+  removeMetadata(session);
+}
+
 function usableCwd(dir) {
   const candidates = [dir, process.cwd(), HOME];
   for (const candidate of candidates) {
@@ -305,6 +317,7 @@ function parseFlags(args) {
     if (arg === '--json') out.json = true;
     else if (arg === '--all') out.all = true;
     else if (arg === '--force') out.force = true;
+    else if (arg === '--file') out.file = true;
     else if (arg === '--cwd') {
       if (i + 1 >= args.length) throw new Error('--cwd requires a directory.');
       out.cwd = args[++i];
@@ -717,8 +730,14 @@ async function ui() {
     }
     const status = runCodexAndReturn('delete', session, ['--force'], `Deleted ${shortId(session.id)}.`);
     if (status !== 0) {
-      const hide = await askConfirm(`Codex could not delete ${shortId(session.id)}. Hide it from workbench?`);
-      if (hide) {
+      const removeFile = await askConfirm(`Codex could not delete ${shortId(session.id)}. Delete its session file?`);
+      if (removeFile) {
+        deleteSessionFile(session);
+        refreshAfterAction(`Deleted file for ${shortId(session.id)}.`);
+        return;
+      }
+      const hideSession = await askConfirm(`Hide ${shortId(session.id)} from workbench instead?`);
+      if (hideSession) {
         updateMetadata(session, { hidden: true });
         refreshAfterAction(`Hidden ${shortId(session.id)}.`);
       }
@@ -751,7 +770,11 @@ async function main() {
   if (cmd === 'unarchive') return codexCommand('unarchive', resolveSession(flags._[0], sessions));
   if (cmd === 'hide') return updateMetadata(resolveSession(flags._[0], sessions), { hidden: true });
   if (cmd === 'unhide') return updateMetadata(resolveSession(flags._[0], sessions), { hidden: false });
-  if (cmd === 'delete') return codexCommand('delete', resolveSession(flags._[0], sessions), flags.force ? ['--force'] : []);
+  if (cmd === 'delete') {
+    const session = resolveSession(flags._[0], sessions);
+    if (flags.file) return deleteSessionFile(session);
+    return codexCommand('delete', session, flags.force ? ['--force'] : []);
+  }
 
   usage();
   process.exitCode = 2;

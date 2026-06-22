@@ -12,6 +12,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-workbench-smoke-'));
 const codexHome = path.join(tmp, '.codex');
 const sessionsDir = path.join(codexHome, 'sessions', '2026', '06');
 const sessionFile = path.join(sessionsDir, 'rollout-2026-06-22T00-00-00-abcdef1234567890.jsonl');
+const deleteFileSession = path.join(sessionsDir, 'rollout-2026-06-22T00-00-01-fedcba0987654321.jsonl');
 const fakeBinDir = path.join(tmp, 'bin');
 const fakeCodex = path.join(fakeBinDir, 'codex');
 const failingCodex = path.join(fakeBinDir, 'failing-codex');
@@ -61,6 +62,25 @@ fs.writeFileSync(sessionFile, [
     },
   }),
 ].join('\n') + '\n');
+fs.writeFileSync(deleteFileSession, [
+  JSON.stringify({
+    type: 'session_meta',
+    payload: {
+      id: 'fedcba0987654321',
+      timestamp: '2026-06-22T00:00:01.000Z',
+      cwd: root,
+      cli_version: '0.0.0-test',
+    },
+  }),
+  JSON.stringify({
+    type: 'response_item',
+    payload: {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'input_text', text: 'Broken session' }],
+    },
+  }),
+].join('\n') + '\n');
 
 function run(args, extraEnv = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
@@ -78,9 +98,10 @@ function run(args, extraEnv = {}) {
 let result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
 const sessions = JSON.parse(result.stdout);
-assert.strictEqual(sessions.length, 1);
-assert.strictEqual(sessions[0].id, 'abcdef1234567890');
-assert.strictEqual(sessions[0].first, 'Fix the project');
+assert.strictEqual(sessions.length, 2);
+const mainSession = sessions.find((session) => session.id === 'abcdef1234567890');
+assert.ok(mainSession);
+assert.strictEqual(mainSession.first, 'Fix the project');
 
 result = run(['show', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);
@@ -99,17 +120,24 @@ result = run(['hide', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);
 result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
-assert.strictEqual(JSON.parse(result.stdout).length, 0);
+assert.strictEqual(JSON.parse(result.stdout).length, 1);
 result = run(['list', '--json', '--all']);
 assert.strictEqual(result.status, 0, result.stderr);
 let allSessions = JSON.parse(result.stdout);
-assert.strictEqual(allSessions.length, 1);
-assert.strictEqual(allSessions[0].hidden, true);
+assert.strictEqual(allSessions.length, 2);
+assert.strictEqual(allSessions.find((session) => session.id === 'abcdef1234567890').hidden, true);
 result = run(['unhide', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);
 result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
-assert.strictEqual(JSON.parse(result.stdout).length, 1);
+assert.strictEqual(JSON.parse(result.stdout).length, 2);
+
+result = run(['delete', 'fedcba', '--file']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(fs.existsSync(deleteFileSession), false);
+result = run(['list', '--json', '--all']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === 'fedcba0987654321'), false);
 
 result = run(['archive', 'abcdef'], {
   CODEX_BIN: fakeCodex,

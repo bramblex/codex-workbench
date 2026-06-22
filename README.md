@@ -50,7 +50,7 @@ codex-workbench archive <session>
 codex-workbench unarchive <session>
 codex-workbench hide <session>
 codex-workbench unhide <session>
-codex-workbench delete <session> [--force]
+codex-workbench delete <session> [--force] [--file]
 ```
 
 Run without arguments to open the interactive UI:
@@ -80,6 +80,12 @@ Use `hide` for sessions that Codex itself can no longer resume, archive, or dele
 codex-workbench hide <session>
 codex-workbench unhide <session>
 codex-workbench list --all
+```
+
+Use `delete --file` only for broken sessions that Codex can no longer remove. It deletes the local session JSONL file directly:
+
+```sh
+codex-workbench delete <session> --file
 ```
 
 Use `doctor` to check which Codex executable the CLI will launch:
