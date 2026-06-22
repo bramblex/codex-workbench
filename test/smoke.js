@@ -1,0 +1,161 @@
+'use strict';
+
+const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+const root = path.resolve(__dirname, '..');
+const cli = path.join(root, 'src', 'cli.js');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-workbench-smoke-'));
+const codexHome = path.join(tmp, '.codex');
+const sessionsDir = path.join(codexHome, 'sessions', '2026', '06');
+const sessionFile = path.join(sessionsDir, 'rollout-2026-06-22T00-00-00-abcdef1234567890.jsonl');
+const fakeBinDir = path.join(tmp, 'bin');
+const fakeCodex = path.join(fakeBinDir, 'codex');
+const failingCodex = path.join(fakeBinDir, 'failing-codex');
+const fakeCodexLog = path.join(tmp, 'codex-argv.log');
+const fakeShell = path.join(fakeBinDir, 'shell');
+
+fs.mkdirSync(sessionsDir, { recursive: true });
+fs.mkdirSync(fakeBinDir, { recursive: true });
+fs.writeFileSync(fakeCodex, `#!/bin/sh
+printf '%s\\n' "$@" > "${fakeCodexLog}"
+exit 0
+`);
+fs.chmodSync(fakeCodex, 0o755);
+fs.writeFileSync(failingCodex, '#!/bin/sh\nexit 7\n');
+fs.chmodSync(failingCodex, 0o755);
+fs.writeFileSync(fakeShell, `#!/bin/sh
+case "$2" in
+  "command -v 'codex'") printf '%s\\n' "${fakeCodex}" ;;
+  *) /bin/sh -c "$2" ;;
+esac
+`);
+fs.chmodSync(fakeShell, 0o755);
+fs.writeFileSync(sessionFile, [
+  JSON.stringify({
+    type: 'session_meta',
+    payload: {
+      id: 'abcdef1234567890',
+      timestamp: '2026-06-22T00:00:00.000Z',
+      cwd: root,
+      cli_version: '0.0.0-test',
+    },
+  }),
+  JSON.stringify({
+    type: 'response_item',
+    payload: {
+      type: 'message',
+      role: 'user',
+      content: [{ type: 'input_text', text: 'Fix the project' }],
+    },
+  }),
+  JSON.stringify({
+    type: 'response_item',
+    payload: {
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'output_text', text: 'Done' }],
+    },
+  }),
+].join('\n') + '\n');
+
+function run(args, extraEnv = {}) {
+  return spawnSync(process.execPath, [cli, ...args], {
+    cwd: root,
+    env: {
+      ...process.env,
+      CODEX_HOME: codexHome,
+      CODEX_WORKBENCH_META: path.join(codexHome, 'meta.json'),
+      ...extraEnv,
+    },
+    encoding: 'utf8',
+  });
+}
+
+let result = run(['list', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+const sessions = JSON.parse(result.stdout);
+assert.strictEqual(sessions.length, 1);
+assert.strictEqual(sessions[0].id, 'abcdef1234567890');
+assert.strictEqual(sessions[0].first, 'Fix the project');
+
+result = run(['show', 'abcdef']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.match(result.stdout, /id:\s+abcdef1234567890/);
+assert.match(result.stdout, /U: Fix the project/);
+
+result = run(['show']);
+assert.strictEqual(result.status, 1);
+assert.match(result.stderr, /Missing session/);
+
+result = run(['list', '--cwd']);
+assert.strictEqual(result.status, 1);
+assert.match(result.stderr, /--cwd requires a directory/);
+
+result = run(['archive', 'abcdef'], {
+  CODEX_BIN: fakeCodex,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
+  'archive',
+  'abcdef1234567890',
+]);
+
+fs.rmSync(fakeCodexLog, { force: true });
+result = run(['fork', 'abcdef'], {
+  CODEX_BIN: fakeCodex,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
+  'fork',
+  'abcdef1234567890',
+]);
+
+fs.rmSync(fakeCodexLog, { force: true });
+result = run(['archive', 'abcdef'], {
+  CODEX_BIN: '',
+  PATH: fakeBinDir,
+  SHELL: '/bin/sh',
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
+  'archive',
+  'abcdef1234567890',
+]);
+
+result = run(['doctor'], {
+  CODEX_BIN: '',
+  PATH: '',
+  SHELL: fakeShell,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.match(result.stdout, /status: ok/);
+assert.match(result.stdout, new RegExp(`codex:\\s+${fakeCodex.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+assert.match(result.stdout, /source: shell login PATH/);
+
+fs.rmSync(fakeCodexLog, { force: true });
+result = run(['archive', 'abcdef'], {
+  CODEX_BIN: '',
+  PATH: '',
+  SHELL: fakeShell,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
+  'archive',
+  'abcdef1234567890',
+]);
+
+result = run(['archive', 'abcdef'], { CODEX_BIN: path.join(tmp, 'missing-codex') });
+assert.strictEqual(result.status, 1);
+assert.match(result.stderr, /CODEX_BIN is not executable/);
+
+result = run(['archive', 'abcdef'], { CODEX_BIN: failingCodex });
+assert.strictEqual(result.status, 7);
+
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+for (const binPath of Object.values(pkg.bin)) {
+  assert.ok(fs.existsSync(path.join(root, binPath)), `missing bin target: ${binPath}`);
+}

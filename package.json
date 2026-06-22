@@ -1,0 +1,42 @@
+{
+  "name": "@bramblex/codex-workbench",
+  "version": "0.1.0",
+  "description": "Terminal workbench for browsing and managing local Codex sessions.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bramblex/codex-workbench.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bramblex/codex-workbench/issues"
+  },
+  "homepage": "https://github.com/bramblex/codex-workbench#readme",
+  "keywords": [
+    "codex",
+    "cli",
+    "terminal",
+    "sessions",
+    "tui"
+  ],
+  "bin": {
+    "codex-workbench": "bin/codex-workbench"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --check src/cli.js && node --check src/codex-bin.js && node test/codex-bin.test.js && node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81"
+  }
+}

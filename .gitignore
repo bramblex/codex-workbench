@@ -1,0 +1,15 @@
+node_modules/
+
+# npm artifacts
+*.tgz
+npm-debug.log*
+
+# Runtime logs
+*.log
+
+# Local configuration
+.env
+.env.*
+
+# macOS
+.DS_Store
