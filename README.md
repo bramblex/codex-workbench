@@ -57,6 +57,12 @@ Run without arguments to open the interactive UI:
 codex-workbench
 ```
 
+The package also installs the short alias:
+
+```sh
+cwb
+```
+
 Use `list` to find sessions:
 
 ```sh

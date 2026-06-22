@@ -1,6 +1,6 @@
 {
   "name": "@bramblex/codex-workbench",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Terminal workbench for browsing and managing local Codex sessions.",
   "license": "MIT",
   "repository": {
@@ -19,7 +19,8 @@
     "tui"
   ],
   "bin": {
-    "codex-workbench": "bin/codex-workbench"
+    "codex-workbench": "bin/codex-workbench",
+    "cwb": "bin/codex-workbench"
   },
   "publishConfig": {
     "access": "public"
