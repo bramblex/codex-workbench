@@ -95,6 +95,22 @@ result = run(['list', '--cwd']);
 assert.strictEqual(result.status, 1);
 assert.match(result.stderr, /--cwd requires a directory/);
 
+result = run(['hide', 'abcdef']);
+assert.strictEqual(result.status, 0, result.stderr);
+result = run(['list', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(JSON.parse(result.stdout).length, 0);
+result = run(['list', '--json', '--all']);
+assert.strictEqual(result.status, 0, result.stderr);
+let allSessions = JSON.parse(result.stdout);
+assert.strictEqual(allSessions.length, 1);
+assert.strictEqual(allSessions[0].hidden, true);
+result = run(['unhide', 'abcdef']);
+assert.strictEqual(result.status, 0, result.stderr);
+result = run(['list', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(JSON.parse(result.stdout).length, 1);
+
 result = run(['archive', 'abcdef'], {
   CODEX_BIN: fakeCodex,
 });

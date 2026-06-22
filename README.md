@@ -48,6 +48,8 @@ codex-workbench resume <session> [prompt...]
 codex-workbench fork <session>
 codex-workbench archive <session>
 codex-workbench unarchive <session>
+codex-workbench hide <session>
+codex-workbench unhide <session>
 codex-workbench delete <session> [--force]
 ```
 
@@ -69,6 +71,14 @@ Use `list` to find sessions:
 codex-workbench list
 codex-workbench list --json
 codex-workbench list --cwd /path/to/project
+codex-workbench list --all
+```
+
+Use `hide` for sessions that Codex itself can no longer resume, archive, or delete. Hidden sessions are removed from the default list but remain visible with `--all`:
+
+```sh
+codex-workbench hide <session>
+codex-workbench unhide <session>
 codex-workbench list --all
 ```
 

@@ -27,6 +27,8 @@ Usage:
   codex-workbench fork <session>
   codex-workbench archive <session>
   codex-workbench unarchive <session>
+  codex-workbench hide <session>
+  codex-workbench unhide <session>
   codex-workbench delete <session> [--force]
 
 Environment:
@@ -175,7 +177,7 @@ function truncate(text, width) {
 
 function printList(sessions, opts = {}) {
   const filtered = sessions.filter((session) => {
-    if (!opts.all && session.archived) return false;
+    if (!opts.all && (session.archived || session.hidden)) return false;
     if (opts.cwd) return path.resolve(session.cwd) === path.resolve(opts.cwd);
     return true;
   });
@@ -192,7 +194,7 @@ function printList(sessions, opts = {}) {
     console.log(`\n${cwd}`);
     for (const session of group) {
       const label = session.name || truncate(session.first || session.last || '(no prompt)', 56);
-      const flags = [session.archived ? 'archived' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
+      const flags = [session.archived ? 'archived' : '', session.hidden ? 'hidden' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
       console.log(`  ${shortId(session.id)}  ${localTime(session.updatedAt)}  ${String(session.turns).padStart(2)} turns  ${flags ? `[${flags}] ` : ''}${label}`);
     }
   }
@@ -200,7 +202,7 @@ function printList(sessions, opts = {}) {
 }
 
 function printShow(session) {
-  console.log(`${session.name || '(unnamed)'} ${session.archived ? '[archived]' : ''}`);
+  console.log(`${session.name || '(unnamed)'} ${session.archived ? '[archived]' : ''}${session.hidden ? '[hidden]' : ''}`);
   console.log(`id:       ${session.id}`);
   console.log(`cwd:      ${session.cwd}`);
   console.log(`started:  ${localTime(session.startedAt)}`);
@@ -524,7 +526,7 @@ async function ui() {
   const promptOpen = () => prompt.visible || question.visible;
 
   const reload = () => {
-    sessions = listSessions().filter((s) => !s.archived);
+    sessions = listSessions().filter((s) => !s.archived && !s.hidden);
     groups = ['All', ...new Set(sessions.map((s) => s.cwd))];
     if (groupIndex >= groups.length) groupIndex = Math.max(0, groups.length - 1);
     const visible = currentSessions();
@@ -594,6 +596,7 @@ async function ui() {
     }
     if (status === 0) refreshAfterAction(doneText);
     else refreshAfterAction(`${command} exited with code ${status}.`, true);
+    return status;
   };
 
   const runAction = async (action) => {
@@ -712,7 +715,14 @@ async function ui() {
       setMessage('Delete cancelled.');
       return render();
     }
-    runCodexAndReturn('delete', session, ['--force'], `Deleted ${shortId(session.id)}.`);
+    const status = runCodexAndReturn('delete', session, ['--force'], `Deleted ${shortId(session.id)}.`);
+    if (status !== 0) {
+      const hide = await askConfirm(`Codex could not delete ${shortId(session.id)}. Hide it from workbench?`);
+      if (hide) {
+        updateMetadata(session, { hidden: true });
+        refreshAfterAction(`Hidden ${shortId(session.id)}.`);
+      }
+    }
   }));
 
   sessionsList.focus();
@@ -739,6 +749,8 @@ async function main() {
   if (cmd === 'fork') return codexCommand('fork', resolveSession(flags._[0], sessions), [], true);
   if (cmd === 'archive') return codexCommand('archive', resolveSession(flags._[0], sessions));
   if (cmd === 'unarchive') return codexCommand('unarchive', resolveSession(flags._[0], sessions));
+  if (cmd === 'hide') return updateMetadata(resolveSession(flags._[0], sessions), { hidden: true });
+  if (cmd === 'unhide') return updateMetadata(resolveSession(flags._[0], sessions), { hidden: false });
   if (cmd === 'delete') return codexCommand('delete', resolveSession(flags._[0], sessions), flags.force ? ['--force'] : []);
 
   usage();
