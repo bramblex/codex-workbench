@@ -149,6 +149,15 @@ assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n
 ]);
 
 fs.rmSync(fakeCodexLog, { force: true });
+result = run(['new', '--cwd', tmp, 'hello'], {
+  CODEX_BIN: fakeCodex,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
+  'hello',
+]);
+
+fs.rmSync(fakeCodexLog, { force: true });
 result = run(['fork', 'abcdef'], {
   CODEX_BIN: fakeCodex,
 });

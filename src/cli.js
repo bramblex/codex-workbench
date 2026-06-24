@@ -23,6 +23,7 @@ Usage:
   codex-workbench show <session>
   codex-workbench rename <session> <name>
   codex-workbench note <session> <note>
+  codex-workbench new [--cwd <dir>] [prompt...]
   codex-workbench resume <session> [prompt...]
   codex-workbench fork <session>
   codex-workbench archive <session>
@@ -310,6 +311,31 @@ function codexCommand(command, session, args = [], inherit = false) {
   return status;
 }
 
+function codexNewSession(cwd, args = [], inherit = false) {
+  const executable = resolveCodexBin();
+  const argv = [executable, ...args];
+  const shellCommand = `exec ${argv.map(shellQuote).join(' ')}`;
+  const resolvedCwd = usableCwd(cwd);
+  const shell = commandShell();
+  if (inherit) {
+    const child = spawn(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd: resolvedCwd, env: process.env });
+    child.on('error', (err) => {
+      console.error(`error: failed to start codex: ${err.message}`);
+      process.exit(1);
+    });
+    child.on('exit', (code, signal) => {
+      if (signal) process.kill(process.pid, signal);
+      process.exit(code || 0);
+    });
+    return;
+  }
+  const result = spawnSync(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd: resolvedCwd, env: process.env });
+  if (result.error) throw new Error(`failed to start codex: ${result.error.message}`);
+  const status = result.status || 0;
+  process.exitCode = status;
+  return status;
+}
+
 function parseFlags(args) {
   const out = { _: [] };
   for (let i = 0; i < args.length; i += 1) {
@@ -449,6 +475,40 @@ async function ui() {
     style: { border: { fg: 'red' }, fg: 'white', bg: 'black' },
   });
 
+  const directoryPicker = blessed.list({
+    parent: screen,
+    label: ' Choose directory ',
+    top: 'center',
+    left: 'center',
+    width: '80%',
+    height: '70%',
+    border: 'line',
+    hidden: true,
+    mouse: true,
+    keys: true,
+    vi: false,
+    scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'green' } },
+    style: {
+      border: { fg: 'green' },
+      selected: { fg: 'black', bg: 'green', bold: true },
+      item: { fg: 'white' },
+    },
+  });
+
+  const directoryPickerHelp = blessed.box({
+    parent: screen,
+    hidden: true,
+    left: 'center',
+    width: '80%',
+    height: 3,
+    border: 'line',
+    padding: { left: 1, right: 1 },
+    content: '↑/↓ move  ←/h parent  →/l child  Enter choose selected  Esc/q cancel',
+    style: { border: { fg: 'green' }, fg: 'white', bg: 'black' },
+  });
+
+  let directoryPickerState = null;
+
   const currentSessions = () => {
     const group = groups[groupIndex];
     return group === 'All' ? sessions : sessions.filter((s) => s.cwd === group);
@@ -503,7 +563,7 @@ async function ui() {
     status.style.fg = isError ? 'red' : 'white';
   };
 
-  const promptOpen = () => prompt.visible || question.visible;
+  const promptOpen = () => prompt.visible || question.visible || directoryPicker.visible;
 
   const reload = () => {
     sessions = listSessions().filter((s) => !s.archived && !s.hidden);
@@ -588,11 +648,11 @@ async function ui() {
 
     const firstLine = message || 'Ready';
     if (projectFocused) {
-      status.setContent(`${firstLine}\nProjects: ↑/↓ select project  →/Enter sessions  Tab focus  q quit`);
+      status.setContent(`${firstLine}\nProjects: ↑/↓ select project  n new project  →/Enter sessions  Tab focus  q quit`);
     } else if (detailFocused) {
-      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  ← sessions  → projects  Tab focus  q quit`);
+      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  n new session  ← sessions  → projects  Tab focus  q quit`);
     } else {
-      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter/r resume  f fork  v view  n rename  o note  a archive  d delete  q quit`);
+      status.setContent(`${firstLine}\nSessions: ↑/↓ select  n new session  R rename  Enter/r resume  f fork  v view  o note  a archive  d delete  q quit`);
     }
   };
 
@@ -620,13 +680,88 @@ async function ui() {
     question.ask(label, (err, answer) => resolve(!err && Boolean(answer)));
   });
 
+  const directoryEntries = (dir) => {
+    const resolved = usableCwd(dir);
+    const entries = [{ label: `./  ${resolved}`, path: resolved, type: 'current' }];
+    let children = [];
+    try {
+      children = fs.readdirSync(resolved, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => ({
+          label: `${entry.name}/`,
+          path: path.join(resolved, entry.name),
+          type: 'child',
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+    } catch {
+      children = [];
+    }
+    return entries.concat(children);
+  };
+
+  const applyDirectoryPickerLayout = () => {
+    const width = screen.width || 80;
+    const height = screen.height || 24;
+    const pickerWidth = Math.max(40, Math.floor(width * 0.8));
+    const pickerHeight = Math.max(10, Math.min(height - 6, Math.floor(height * 0.7)));
+    const pickerTop = Math.max(1, Math.floor((height - pickerHeight - 3) / 2));
+    const pickerLeft = Math.max(0, Math.floor((width - pickerWidth) / 2));
+
+    directoryPicker.width = pickerWidth;
+    directoryPicker.height = pickerHeight;
+    directoryPicker.top = pickerTop;
+    directoryPicker.left = pickerLeft;
+
+    directoryPickerHelp.width = pickerWidth;
+    directoryPickerHelp.top = pickerTop + pickerHeight;
+    directoryPickerHelp.left = pickerLeft;
+  };
+
+  const renderDirectoryPicker = (dir, selectedPath = null) => {
+    if (!directoryPickerState) return;
+    const resolved = usableCwd(dir);
+    const entries = directoryEntries(resolved);
+    const selectedIndex = Math.max(0, entries.findIndex((entry) => selectedPath && entry.path === selectedPath));
+    directoryPickerState.dir = resolved;
+    directoryPickerState.entries = entries;
+    applyDirectoryPickerLayout();
+    directoryPicker.setLabel(` Choose directory: ${truncate(resolved, Math.max(24, (screen.width || 80) - 20))} `);
+    directoryPicker.clearItems();
+    directoryPicker.setItems(entries.map((entry) => entry.label));
+    directoryPicker.select(selectedIndex);
+    directoryPicker.scrollTo(selectedIndex);
+  };
+
+  const closeDirectoryPicker = (value) => {
+    if (!directoryPickerState) return;
+    const { resolve } = directoryPickerState;
+    directoryPickerState = null;
+    directoryPicker.hide();
+    directoryPickerHelp.hide();
+    focusPanel(projectsList, 'projects');
+    resolve(value);
+  };
+
+  const askDirectory = (startDir) => new Promise((resolve) => {
+    directoryPickerState = { resolve, dir: usableCwd(startDir), entries: [] };
+    renderDirectoryPicker(startDir);
+    directoryPicker.show();
+    directoryPickerHelp.show();
+    directoryPicker.focus();
+    screen.render();
+  });
+
   const leaveScreen = () => {
     screen.destroy();
   };
 
-  const refreshAfterAction = (text, isError = false) => {
+  const refreshAfterAction = (text, isError = false, focusCwd = null) => {
     setMessage(text, isError);
     reload();
+    if (focusCwd) {
+      const nextGroupIndex = groups.indexOf(focusCwd);
+      if (nextGroupIndex !== -1) groupIndex = nextGroupIndex;
+    }
     syncProjects();
     syncList();
     render();
@@ -651,6 +786,27 @@ async function ui() {
     }
     if (status === 0) refreshAfterAction(doneText);
     else refreshAfterAction(`${command} exited with code ${status}.`, true);
+    return status;
+  };
+
+  const currentProjectCwd = () => {
+    const group = groups[groupIndex];
+    if (group && group !== 'All') return group;
+    const session = selectedSession();
+    return session && session.cwd && session.cwd !== '(unknown)' ? session.cwd : process.cwd();
+  };
+
+  const runNewCodexAndReturn = (cwd, args = []) => {
+    const resolvedCwd = usableCwd(cwd);
+    screen.leave();
+    let status = 0;
+    try {
+      status = codexNewSession(resolvedCwd, args);
+    } finally {
+      screen.enter();
+    }
+    if (status === 0) refreshAfterAction(`New session finished in ${resolvedCwd}.`, false, resolvedCwd);
+    else refreshAfterAction(`new session exited with code ${status}.`, true, resolvedCwd);
     return status;
   };
 
@@ -691,6 +847,50 @@ async function ui() {
   detailBox.on('focus', () => {
     activePanel = 'details';
     updateFocusStyles();
+  });
+
+  const confirmDirectoryPickerSelection = (index = directoryPicker.selected) => {
+    if (!directoryPickerState) return;
+    const entry = directoryPickerState.entries[index];
+    if (!entry) return;
+    closeDirectoryPicker(entry.path);
+  };
+
+  directoryPicker.key(['enter'], () => {
+    confirmDirectoryPickerSelection();
+  });
+
+  directoryPicker.key(['up', 'k'], () => {
+    if (!directoryPickerState) return;
+    directoryPicker.up();
+    screen.render();
+  });
+
+  directoryPicker.key(['down', 'j'], () => {
+    if (!directoryPickerState) return;
+    directoryPicker.down();
+    screen.render();
+  });
+
+  directoryPicker.key(['escape', 'q'], () => {
+    closeDirectoryPicker(null);
+  });
+
+  directoryPicker.key(['left', 'h'], () => {
+    if (!directoryPickerState) return;
+    const current = directoryPickerState.dir;
+    const parent = path.dirname(current);
+    if (parent === current) return;
+    renderDirectoryPicker(parent, current);
+    screen.render();
+  });
+
+  directoryPicker.key(['right', 'l'], () => {
+    if (!directoryPickerState) return;
+    const entry = directoryPickerState.entries[directoryPicker.selected];
+    if (!entry || entry.type !== 'child') return;
+    renderDirectoryPicker(entry.path);
+    screen.render();
   });
 
   projectsList.key(['j', 'down'], () => {
@@ -760,6 +960,7 @@ async function ui() {
 
   screen.on('resize', () => {
     applyLayout();
+    if (directoryPickerState) applyDirectoryPickerLayout();
     syncProjects();
     syncList();
     render();
@@ -799,7 +1000,21 @@ async function ui() {
     process.exit(0);
   }));
 
-  screen.key(['n'], () => runAction(async (session) => {
+  screen.key(['n'], async () => {
+    if (promptOpen()) return;
+    if (activePanel === 'projects') {
+      const dir = await askDirectory(currentProjectCwd());
+      if (!dir) {
+        setMessage('New project cancelled.');
+        return render();
+      }
+      runNewCodexAndReturn(dir);
+      return;
+    }
+    runNewCodexAndReturn(currentProjectCwd());
+  });
+
+  screen.key(['R', 'S-r'], () => runAction(async (session) => {
     const name = await askInput('Name', session.name || '');
     if (name === null) return render();
     updateMetadata(session, { name });
@@ -859,6 +1074,7 @@ async function main() {
   if (cmd === 'show') return printShow(resolveSession(flags._[0], sessions));
   if (cmd === 'rename') return updateMetadata(resolveSession(flags._[0], sessions), { name: flags._.slice(1).join(' ') });
   if (cmd === 'note') return updateMetadata(resolveSession(flags._[0], sessions), { note: flags._.slice(1).join(' ') });
+  if (cmd === 'new' || cmd === 'start') return codexNewSession(flags.cwd || process.cwd(), flags._, true);
   if (cmd === 'resume') return codexCommand('resume', resolveSession(flags._[0], sessions), flags._.slice(1), true);
   if (cmd === 'fork') return codexCommand('fork', resolveSession(flags._[0], sessions), [], true);
   if (cmd === 'archive') return codexCommand('archive', resolveSession(flags._[0], sessions));

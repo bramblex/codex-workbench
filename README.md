@@ -44,6 +44,7 @@ codex-workbench list [--json] [--cwd <dir>] [--all]
 codex-workbench show <session>
 codex-workbench rename <session> <name>
 codex-workbench note <session> <note>
+codex-workbench new [--cwd <dir>] [prompt...]
 codex-workbench resume <session> [prompt...]
 codex-workbench fork <session>
 codex-workbench archive <session>
@@ -74,6 +75,13 @@ codex-workbench list --cwd /path/to/project
 codex-workbench list --all
 ```
 
+Use `new` to start a fresh Codex session in a project directory:
+
+```sh
+codex-workbench new --cwd /path/to/project
+codex-workbench new --cwd /path/to/project "Summarize this repo"
+```
+
 Use `hide` for sessions that Codex itself can no longer resume, archive, or delete. Hidden sessions are removed from the default list but remain visible with `--all`:
 
 ```sh
@@ -98,19 +106,20 @@ Most commands accept a full session id, a unique prefix, a saved name, or a sess
 
 ## Interactive UI
 
-The UI groups sessions by working directory, with sessions above and details below. When you resume a session, Codex temporarily takes over the terminal; when Codex exits, codex-workbench redraws the UI.
+The UI groups sessions by working directory, with projects on the left, sessions on the upper right, and details below. When you start or resume a session, Codex temporarily takes over the terminal; when Codex exits, codex-workbench redraws the UI.
 
 Common keys:
 
 - `Enter` or `r`: resume the selected session in Codex
+- `n`: create a new project/session from Projects, or a new session from Sessions/Details
 - `f`: fork the selected session
 - `v`: print session details and exit
-- `n`: rename the selected session
+- `R`: rename the selected session
 - `o`: add or edit a note
 - `a`: archive the selected session
 - `d`: delete the selected session
-- `Tab`: switch focus between the session list and details pane
-- `Left`/`Right` or `h`/`l`: switch project group
+- `Tab`: switch focus between projects, sessions, and details
+- `Left`/`Right` or `h`/`l`: move between panes
 - `q`, `Esc`, or `Ctrl+C`: quit
 
 ## Environment
