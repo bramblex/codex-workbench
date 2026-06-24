@@ -125,6 +125,9 @@ Common keys:
 - `d`: delete the selected session
 - `Tab`: switch focus between projects, sessions, and details
 - `Left`/`Right` or `h`/`l`: move between panes
+- `0`: show all sources
+- `1`-`9`: jump to a source
+- `[`/`]`: switch to the previous or next source
 - `q`, `Esc`, or `Ctrl+C`: quit
 
 In the directory picker, use `Up`/`Down` or `j`/`k` to move, `Left`/`h` for the parent directory, `Right`/`l` for the selected child directory, `n` to create a child directory, and `Enter` to choose the selected directory.

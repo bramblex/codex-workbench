@@ -191,11 +191,26 @@ async function runWorkbench() {
     return `${group.source.label}: ${group.cwd}`;
   };
 
+  const sourceShortcut = (source) => {
+    const index = sources.findIndex((item) => item.id === source.id);
+    return index >= 0 && index < 9 ? String(index + 1) : '';
+  };
+
+  const machineLabel = (source, count) => {
+    const shortcut = sourceShortcut(source);
+    const prefix = shortcut ? `${shortcut} ` : '';
+    const maxLabel = Math.max(8, projectWidth - 18);
+    const text = `${prefix}${truncate(source.label, maxLabel)} (${count})`;
+    const width = Math.max(12, projectWidth - 4);
+    const head = `- ${text} `;
+    return `${head}${'-'.repeat(width)}`.slice(0, width);
+  };
+
   const projectLabel = (group) => {
-    if (group.kind === 'all') return `All (${sessions.length})`;
+    if (group.kind === 'all') return `0 All (${sessions.length})`;
     if (group.kind === 'source') {
       const count = sessionsForSource(group.source.id).length;
-      return `${truncate(group.source.label, Math.max(10, projectWidth - 6))} (${count})`;
+      return machineLabel(group.source, count);
     }
     const count = sessions.filter((session) => session.sourceId === group.source.id && session.cwd === group.cwd).length;
     const base = path.basename(group.cwd) || group.cwd;
@@ -410,11 +425,11 @@ async function runWorkbench() {
 
     const firstLine = message || 'Ready';
     if (projectFocused) {
-      status.setContent(`${firstLine}\nProjects: ↑/↓ select project  n new project  →/Enter sessions  Tab focus  q quit`);
+      status.setContent(`${firstLine}\nSources: ↑/↓ select  0 all  1-9 machine  [/] prev/next  n new  → sessions  q quit`);
     } else if (detailFocused) {
-      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  n new session  ← sessions  → projects  Tab focus  q quit`);
+      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  1-9 machine  [/] prev/next  n new  ← sessions  q quit`);
     } else {
-      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter resume  r rename  n new session  f fork  v view  o note  a archive  d delete  q quit`);
+      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter resume  1-9 machine  [/] prev/next  r rename  n new  d delete`);
     }
   };
 
@@ -482,6 +497,35 @@ async function runWorkbench() {
     syncProjects();
     syncList();
     render();
+  };
+
+  const selectSourceIndex = (sourceIndex) => {
+    const source = sources[sourceIndex];
+    if (!source) return;
+    const nextIndex = groups.findIndex((group) => group.kind === 'source' && group.source.id === source.id);
+    if (nextIndex === -1) return;
+    selectGroup(nextIndex);
+    setMessage(`Switched to ${source.label}.`);
+    render();
+  };
+
+  const currentSourceIndex = () => {
+    const group = currentGroup();
+    if (group.kind === 'source' || group.kind === 'project') {
+      return sources.findIndex((source) => source.id === group.source.id);
+    }
+    const session = selectedSession();
+    if (session) return sources.findIndex((source) => source.id === session.sourceId);
+    return -1;
+  };
+
+  const switchSource = (delta) => {
+    if (!sources.length) return;
+    const currentIndex = currentSourceIndex();
+    const nextIndex = currentIndex === -1
+      ? (delta > 0 ? 0 : sources.length - 1)
+      : (currentIndex + delta + sources.length) % sources.length;
+    selectSourceIndex(nextIndex);
   };
 
   const runCodexAndReturn = (command, session, args = [], doneText = `${command} finished.`) => {
@@ -666,6 +710,30 @@ async function runWorkbench() {
     if (activePanel === 'details') focusPanel(sessionsList, 'sessions');
     else if (activePanel === 'sessions') focusPanel(projectsList, 'projects');
     else focusPanel(detailBox, 'details');
+  });
+
+  screen.key(['0'], () => {
+    if (promptOpen()) return;
+    selectGroup(0);
+    setMessage('Switched to all sources.');
+    render();
+  });
+
+  for (let i = 1; i <= 9; i += 1) {
+    screen.key([String(i)], () => {
+      if (promptOpen()) return;
+      selectSourceIndex(i - 1);
+    });
+  }
+
+  screen.key([']'], () => {
+    if (promptOpen()) return;
+    switchSource(1);
+  });
+
+  screen.key(['['], () => {
+    if (promptOpen()) return;
+    switchSource(-1);
   });
 
   screen.key(['q', 'escape', 'C-c'], () => {
