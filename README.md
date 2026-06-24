@@ -147,8 +147,12 @@ npm pack --dry-run
 Project layout:
 
 ```text
-bin/codex-workbench  # executable entrypoint
-src/cli.js           # main CLI and UI implementation
-src/codex-bin.js     # Codex executable discovery
-test/smoke.js        # smoke tests
+bin/codex-workbench       # executable entrypoint
+src/cli.js                # thin CLI router
+src/cli-output.js         # terminal output presenters
+src/codex-bin.js          # Codex executable discovery
+src/model/                # session parsing, metadata, and format helpers
+src/services/             # Codex process runner
+src/ui/                   # interactive UI and components
+test/smoke.js             # smoke tests
 ```
