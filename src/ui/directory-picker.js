@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+require('./blessed-compat');
 const blessed = require('blessed');
 const { createChildDirectory, directoryNameError, listDirectories } = require('../model/directories');
 

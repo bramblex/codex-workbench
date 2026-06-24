@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+require('./blessed-compat');
 const blessed = require('blessed');
 const { printList, printShow } = require('../cli-output');
 const { deleteSessionFile } = require('../model/session-store');
