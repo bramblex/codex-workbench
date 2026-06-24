@@ -69,6 +69,7 @@ async function runWorkbench() {
     mouse: true,
     keys: true,
     vi: false,
+    tags: true,
     scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'green' } },
     style: {
       border: { fg: 'green' },
@@ -196,25 +197,28 @@ async function runWorkbench() {
     return index >= 0 && index < 9 ? String(index + 1) : '';
   };
 
+  const styledListLabel = (color, text) => `{${color}-fg}{bold}${blessed.escape(text)}{/}`;
+
   const machineLabel = (source, count) => {
     const shortcut = sourceShortcut(source);
     const prefix = shortcut ? `${shortcut} ` : '';
     const maxLabel = Math.max(8, projectWidth - 18);
     const text = `${prefix}${truncate(source.label, maxLabel)} (${count})`;
     const width = Math.max(12, projectWidth - 4);
-    const head = `- ${text} `;
-    return `${head}${'-'.repeat(width)}`.slice(0, width);
+    const head = `= ${text} `;
+    const line = `${head}${'='.repeat(width)}`.slice(0, width);
+    return styledListLabel('yellow', line);
   };
 
   const projectLabel = (group) => {
-    if (group.kind === 'all') return `0 All (${sessions.length})`;
+    if (group.kind === 'all') return styledListLabel('white', `0 All (${sessions.length})`);
     if (group.kind === 'source') {
       const count = sessionsForSource(group.source.id).length;
       return machineLabel(group.source, count);
     }
     const count = sessions.filter((session) => session.sourceId === group.source.id && session.cwd === group.cwd).length;
     const base = path.basename(group.cwd) || group.cwd;
-    return `  ${truncate(base, Math.max(10, projectWidth - 12))} (${count})`;
+    return `  ${blessed.escape(`${truncate(base, Math.max(10, projectWidth - 12))} (${count})`)}`;
   };
 
   const sessionLabel = (session) => {
