@@ -340,6 +340,7 @@ async function ui() {
   let syncingList = false;
   let syncingProjects = false;
   let projectWidth = 32;
+  let activePanel = 'projects';
 
   const screen = blessed.screen({
     smartCSR: true,
@@ -560,14 +561,54 @@ async function ui() {
     syncingList = false;
   };
 
+  const setPanelLabel = (panel, title, focused, fg) => {
+    panel.setLabel(focused ? ` > ${title} ` : `   ${title} `);
+    if (!panel._label) return;
+    panel._label.style.fg = focused ? fg : 'white';
+    panel._label.style.bg = 'default';
+    panel._label.style.bold = focused;
+  };
+
+  const updateFocusStyles = () => {
+    const projectFocused = activePanel === 'projects';
+    const sessionsFocused = activePanel === 'sessions';
+    const detailFocused = activePanel === 'details';
+
+    projectsList.style.border.fg = projectFocused ? 'green' : 'gray';
+    sessionsList.style.border.fg = sessionsFocused ? 'cyan' : 'gray';
+    detailBox.style.border.fg = detailFocused ? 'yellow' : 'gray';
+    projectsList.style.selected.bg = projectFocused ? 'green' : 'gray';
+    projectsList.style.selected.fg = 'black';
+    sessionsList.style.selected.bg = sessionsFocused ? 'cyan' : 'gray';
+    sessionsList.style.selected.fg = 'black';
+
+    setPanelLabel(projectsList, `Projects (${Math.max(0, groups.length - 1)})`, projectFocused, 'green');
+    setPanelLabel(sessionsList, 'Sessions', sessionsFocused, 'cyan');
+    setPanelLabel(detailBox, 'Details', detailFocused, 'yellow');
+
+    const firstLine = message || 'Ready';
+    if (projectFocused) {
+      status.setContent(`${firstLine}\nProjects: ↑/↓ select project  →/Enter sessions  Tab focus  q quit`);
+    } else if (detailFocused) {
+      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  ← sessions  → projects  Tab focus  q quit`);
+    } else {
+      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter/r resume  f fork  v view  n rename  o note  a archive  d delete  q quit`);
+    }
+  };
+
   const render = () => {
     applyLayout();
     const visible = currentSessions();
     header.setContent(` Codex Workbench\n ${visible.length}/${sessions.length} visible  ${groups[groupIndex] === 'All' ? 'All projects' : groups[groupIndex]}`);
-    projectsList.setLabel(` Projects (${Math.max(0, groups.length - 1)}) `);
-    detailBox.setLabel(' Details ');
     detailBox.setContent(detailContent(selectedSession()));
-    status.setContent(`${message || 'Ready'}\nTab focus  ←/→ panes  ↑/↓ select  Enter/r resume  f fork  v view  n rename  o note  a archive  d delete  q quit`);
+    updateFocusStyles();
+    screen.render();
+  };
+
+  const focusPanel = (panel, panelName) => {
+    activePanel = panelName;
+    panel.focus();
+    updateFocusStyles();
     screen.render();
   };
 
@@ -633,7 +674,23 @@ async function ui() {
 
   projectsList.on('select item', (_item, index) => {
     if (syncingProjects) return;
+    activePanel = 'projects';
     selectGroup(index);
+  });
+
+  projectsList.on('focus', () => {
+    activePanel = 'projects';
+    updateFocusStyles();
+  });
+
+  sessionsList.on('focus', () => {
+    activePanel = 'sessions';
+    updateFocusStyles();
+  });
+
+  detailBox.on('focus', () => {
+    activePanel = 'details';
+    updateFocusStyles();
   });
 
   projectsList.key(['j', 'down'], () => {
@@ -648,12 +705,12 @@ async function ui() {
 
   projectsList.key(['right', 'l', 'enter'], () => {
     if (promptOpen()) return;
-    sessionsList.focus();
-    screen.render();
+    focusPanel(sessionsList, 'sessions');
   });
 
   sessionsList.on('select item', (_item, index) => {
     if (syncingList) return;
+    activePanel = 'sessions';
     const visible = currentSessions();
     if (index >= visible.length) {
       selected = Math.max(0, visible.length - 1);
@@ -683,26 +740,22 @@ async function ui() {
 
   sessionsList.key(['left', 'h'], () => {
     if (promptOpen()) return;
-    projectsList.focus();
-    screen.render();
+    focusPanel(projectsList, 'projects');
   });
 
   sessionsList.key(['right', 'l'], () => {
     if (promptOpen()) return;
-    detailBox.focus();
-    screen.render();
+    focusPanel(detailBox, 'details');
   });
 
   detailBox.key(['left', 'h'], () => {
     if (promptOpen()) return;
-    sessionsList.focus();
-    screen.render();
+    focusPanel(sessionsList, 'sessions');
   });
 
   detailBox.key(['right', 'l'], () => {
     if (promptOpen()) return;
-    projectsList.focus();
-    screen.render();
+    focusPanel(projectsList, 'projects');
   });
 
   screen.on('resize', () => {
@@ -714,18 +767,16 @@ async function ui() {
 
   screen.key(['tab'], () => {
     if (promptOpen()) return;
-    if (screen.focused === projectsList) sessionsList.focus();
-    else if (screen.focused === sessionsList) detailBox.focus();
-    else projectsList.focus();
-    screen.render();
+    if (activePanel === 'projects') focusPanel(sessionsList, 'sessions');
+    else if (activePanel === 'sessions') focusPanel(detailBox, 'details');
+    else focusPanel(projectsList, 'projects');
   });
 
   screen.key(['S-tab'], () => {
     if (promptOpen()) return;
-    if (screen.focused === detailBox) sessionsList.focus();
-    else if (screen.focused === sessionsList) projectsList.focus();
-    else detailBox.focus();
-    screen.render();
+    if (activePanel === 'details') focusPanel(sessionsList, 'sessions');
+    else if (activePanel === 'sessions') focusPanel(projectsList, 'projects');
+    else focusPanel(detailBox, 'details');
   });
 
   screen.key(['q', 'escape', 'C-c'], () => {
