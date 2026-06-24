@@ -1,8 +1,8 @@
 # codex-workbench
 
-A small terminal workbench for browsing and managing local Codex sessions.
+A small terminal workbench for browsing and managing Codex sessions.
 
-It reads Codex session JSONL files, groups sessions by project directory, and lets you inspect, rename, annotate, resume, fork, archive, unarchive, or delete sessions from either a command-line interface or an interactive terminal UI.
+It reads local Codex session JSONL files, can aggregate compatible remote workbenches over SSH, groups sessions by source and project directory, and lets you inspect, rename, annotate, resume, fork, archive, unarchive, or delete sessions from either a command-line interface or an interactive terminal UI.
 
 ## Install
 
@@ -45,6 +45,8 @@ codex-workbench show <session>
 codex-workbench rename <session> <name>
 codex-workbench note <session> <note>
 codex-workbench new [--cwd <dir>] [prompt...]
+codex-workbench dirs [--cwd <dir>] [--json]
+codex-workbench mkdir [--cwd <dir>] <name> [--json]
 codex-workbench resume <session> [prompt...]
 codex-workbench fork <session>
 codex-workbench archive <session>
@@ -106,7 +108,7 @@ Most commands accept a full session id, a unique prefix, a saved name, or a sess
 
 ## Interactive UI
 
-The UI groups sessions by working directory, with projects on the left, sessions on the upper right, and details below. When you start or resume a session, Codex temporarily takes over the terminal; when Codex exits, codex-workbench redraws the UI.
+The UI groups sessions by source and working directory, with sources/projects on the left, sessions on the upper right, and details below. When you start or resume a session, Codex temporarily takes over the terminal; when Codex exits, codex-workbench redraws the UI.
 
 Common keys:
 
@@ -124,16 +126,52 @@ Common keys:
 
 In the directory picker, use `Up`/`Down` or `j`/`k` to move, `Left`/`h` for the parent directory, `Right`/`l` for the selected child directory, `n` to create a child directory, and `Enter` to choose the selected directory.
 
+## Remote Servers
+
+codex-workbench can show remote sessions in the interactive UI by calling `cwb` over SSH. The remote server must have `codex-workbench` installed and the configured `cwb` command available to SSH non-interactive commands.
+
+Create `~/.codex/codex-workbench.config.json`:
+
+```json
+{
+  "servers": [
+    {
+      "id": "a",
+      "label": "A server",
+      "target": "user@example.com"
+    },
+    {
+      "id": "b",
+      "label": "B server",
+      "target": "b-host",
+      "command": "/usr/local/bin/cwb",
+      "sshArgs": ["-p", "2222"]
+    }
+  ]
+}
+```
+
+The UI will render `Local`, `A server`, and `B server` as source groups. Remote list, rename, note, hide, directory browsing, new session, resume, fork, archive, and delete commands are executed as SSH calls to the remote `cwb`.
+
+You can verify a remote source directly with:
+
+```sh
+ssh user@example.com 'cwb list --json'
+```
+
 ## Environment
 
 ```sh
 CODEX_HOME            # default: ~/.codex
 CODEX_SESSIONS_DIR    # default: $CODEX_HOME/sessions
 CODEX_WORKBENCH_META  # default: $CODEX_HOME/codex-workbench.json
+CODEX_WORKBENCH_CONFIG # default: $CODEX_HOME/codex-workbench.config.json
 CODEX_BIN             # default: codex from shell PATH
 ```
 
 `CODEX_WORKBENCH_META` stores local workbench metadata such as custom names and notes. Session content remains in the Codex sessions directory.
+
+`CODEX_WORKBENCH_CONFIG` points to the optional local configuration file for SSH remote sources.
 
 By default, codex-workbench launches `codex` through your shell so your normal shell `PATH` applies. Set `CODEX_BIN` if you want to force a specific executable path.
 
@@ -151,8 +189,8 @@ bin/codex-workbench       # executable entrypoint
 src/cli.js                # thin CLI router
 src/cli-output.js         # terminal output presenters
 src/codex-bin.js          # Codex executable discovery
-src/model/                # session parsing, metadata, and format helpers
-src/services/             # Codex process runner
+src/model/                # session parsing, metadata, config, and format helpers
+src/services/             # Codex process runners and session source adapters
 src/ui/                   # interactive UI and components
-test/smoke.js             # smoke tests
+test/                     # smoke and service tests
 ```

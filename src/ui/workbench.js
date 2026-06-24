@@ -3,17 +3,29 @@
 const path = require('path');
 const blessed = require('blessed');
 const { printList, printShow } = require('../cli-output');
-const { deleteSessionFile, listSessions, updateMetadata } = require('../model/session-store');
+const { deleteSessionFile } = require('../model/session-store');
 const { localTime, shortId, truncate } = require('../model/format');
-const { runCodexCommand, runNewCodexSession, usableCwd } = require('../services/codex-runner');
+const {
+  LOCAL_SOURCE,
+  createSourceDirectory,
+  listSourceDirectories,
+  loadWorkbenchSessions,
+  runSourceNewSession,
+  runSourceSessionCommand,
+  sourceById,
+  updateSourceMetadata,
+} = require('../services/session-sources');
+const { usableCwd } = require('../services/codex-runner');
 const { createDirectoryPicker } = require('./directory-picker');
 
 async function runWorkbench() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    return printList(listSessions());
+    return printList(loadWorkbenchSessions().sessions);
   }
 
   let sessions = [];
+  let sources = [];
+  let sourceErrors = [];
   let groups = [];
   let groupIndex = 0;
   let selected = 0;
@@ -130,24 +142,47 @@ async function runWorkbench() {
     style: { border: { fg: 'red' }, fg: 'white', bg: 'black' },
   });
 
+  const sessionsForSource = (sourceId) => sessions.filter((session) => session.sourceId === sourceId);
+
+  const buildGroups = () => {
+    const nextGroups = [{ kind: 'all', label: 'All', source: null, cwd: null }];
+    for (const source of sources) {
+      const sourceSessions = sessionsForSource(source.id);
+      nextGroups.push({ kind: 'source', source, cwd: null });
+      const cwds = [...new Set(sourceSessions.map((session) => session.cwd))];
+      for (const cwd of cwds) {
+        nextGroups.push({ kind: 'project', source, cwd });
+      }
+    }
+    return nextGroups;
+  };
+
+  const currentGroup = () => groups[groupIndex] || groups[0] || { kind: 'all', source: null, cwd: null };
+
   const currentSessions = () => {
-    const group = groups[groupIndex];
-    return group === 'All' ? sessions : sessions.filter((s) => s.cwd === group);
+    const group = currentGroup();
+    if (group.kind === 'all') return sessions;
+    if (group.kind === 'source') return sessionsForSource(group.source.id);
+    return sessions.filter((session) => session.sourceId === group.source.id && session.cwd === group.cwd);
   };
 
   const selectedSession = () => currentSessions()[selected] || null;
 
-  const groupLabel = (group) => {
-    if (group === 'All') return `All (${sessions.length})`;
-    const count = sessions.filter((s) => s.cwd === group).length;
-    return `${path.basename(group) || group} (${count})`;
+  const groupDisplayName = (group) => {
+    if (group.kind === 'all') return 'All sources';
+    if (group.kind === 'source') return group.source.label;
+    return `${group.source.label}: ${group.cwd}`;
   };
 
   const projectLabel = (group) => {
-    if (group === 'All') return groupLabel(group);
-    const count = sessions.filter((s) => s.cwd === group).length;
-    const base = path.basename(group) || group;
-    return `${truncate(base, Math.max(10, projectWidth - 10))} (${count})`;
+    if (group.kind === 'all') return `All (${sessions.length})`;
+    if (group.kind === 'source') {
+      const count = sessionsForSource(group.source.id).length;
+      return `${truncate(group.source.label, Math.max(10, projectWidth - 6))} (${count})`;
+    }
+    const count = sessions.filter((session) => session.sourceId === group.source.id && session.cwd === group.cwd).length;
+    const base = path.basename(group.cwd) || group.cwd;
+    return `  ${truncate(base, Math.max(10, projectWidth - 12))} (${count})`;
   };
 
   const sessionLabel = (session) => {
@@ -167,6 +202,7 @@ async function runWorkbench() {
       title,
       '',
       `id:       ${session.id}`,
+      `source:   ${session.sourceLabel || 'Local'}`,
       `cwd:      ${session.cwd}`,
       `started:  ${localTime(session.startedAt)}`,
       `updated:  ${localTime(session.updatedAt)}`,
@@ -185,11 +221,20 @@ async function runWorkbench() {
   };
 
   const reload = () => {
-    sessions = listSessions().filter((s) => !s.archived && !s.hidden);
-    groups = ['All', ...new Set(sessions.map((s) => s.cwd))];
+    const state = loadWorkbenchSessions();
+    sources = state.sources;
+    sourceErrors = state.errors;
+    sessions = state.sessions.filter((s) => !s.archived && !s.hidden);
+    groups = buildGroups();
     if (groupIndex >= groups.length) groupIndex = Math.max(0, groups.length - 1);
     const visible = currentSessions();
     if (selected >= visible.length) selected = Math.max(0, visible.length - 1);
+    if (sourceErrors.length && (!message || message === 'Ready')) {
+      const first = sourceErrors[0];
+      const detail = `${first.source.label}: ${first.error}`;
+      const prefix = sourceErrors.length === 1 ? 'Remote source failed' : `${sourceErrors.length} remote sources failed`;
+      setMessage(`${prefix}: ${truncate(detail, 100)}`, true);
+    }
   };
 
   const applyLayout = () => {
@@ -261,7 +306,7 @@ async function runWorkbench() {
     sessionsList.style.selected.bg = sessionsFocused ? 'cyan' : 'gray';
     sessionsList.style.selected.fg = 'black';
 
-    setPanelLabel(projectsList, `Projects (${Math.max(0, groups.length - 1)})`, projectFocused, 'green');
+    setPanelLabel(projectsList, `Sources (${sources.length})`, projectFocused, 'green');
     setPanelLabel(sessionsList, 'Sessions', sessionsFocused, 'cyan');
     setPanelLabel(detailBox, 'Details', detailFocused, 'yellow');
 
@@ -278,7 +323,7 @@ async function runWorkbench() {
   const render = () => {
     applyLayout();
     const visible = currentSessions();
-    header.setContent(` Codex Workbench\n ${visible.length}/${sessions.length} visible  ${groups[groupIndex] === 'All' ? 'All projects' : groups[groupIndex]}`);
+    header.setContent(` Codex Workbench\n ${visible.length}/${sessions.length} visible  ${groupDisplayName(currentGroup())}`);
     detailBox.setContent(detailContent(selectedSession()));
     updateFocusStyles();
     screen.render();
@@ -306,7 +351,6 @@ async function runWorkbench() {
     focusOnClose: () => focusPanel(projectsList, 'projects'),
     screen,
     truncate,
-    usableCwd,
   });
 
   const promptOpen = () => prompt.visible || question.visible || directoryPicker.isOpen();
@@ -315,11 +359,15 @@ async function runWorkbench() {
     screen.destroy();
   };
 
-  const refreshAfterAction = (text, isError = false, focusCwd = null) => {
+  const refreshAfterAction = (text, isError = false, focusCwd = null, focusSourceId = null) => {
     setMessage(text, isError);
     reload();
     if (focusCwd) {
-      const nextGroupIndex = groups.indexOf(focusCwd);
+      const nextGroupIndex = groups.findIndex((group) => {
+        return group.kind === 'project' &&
+          group.cwd === focusCwd &&
+          (!focusSourceId || group.source.id === focusSourceId);
+      });
       if (nextGroupIndex !== -1) groupIndex = nextGroupIndex;
     }
     syncProjects();
@@ -340,7 +388,7 @@ async function runWorkbench() {
     screen.leave();
     let status = 0;
     try {
-      status = runCodexCommand(command, session, args);
+      status = runSourceSessionCommand(session, command, args);
     } finally {
       screen.enter();
     }
@@ -350,23 +398,46 @@ async function runWorkbench() {
   };
 
   const currentProjectCwd = () => {
-    const group = groups[groupIndex];
-    if (group && group !== 'All') return group;
+    const group = currentGroup();
+    if (group.kind === 'project') return group.cwd;
     const session = selectedSession();
-    return session && session.cwd && session.cwd !== '(unknown)' ? session.cwd : process.cwd();
+    if (session && session.cwd && session.cwd !== '(unknown)') return session.cwd;
+    if (group.kind === 'source' && group.source.remote) return '.';
+    return process.cwd();
   };
 
+  const currentSource = () => {
+    const group = currentGroup();
+    if (group.kind === 'source' || group.kind === 'project') return group.source;
+    if (activePanel === 'projects') return LOCAL_SOURCE;
+    const session = selectedSession();
+    return session ? sourceById(sources, session.sourceId) : LOCAL_SOURCE;
+  };
+
+  const currentDirectoryStart = () => {
+    const group = currentGroup();
+    if (group.kind === 'project') return group.cwd;
+    return currentSource().remote ? '.' : currentProjectCwd();
+  };
+
+  const directoryOpsForSource = (source) => ({
+    listDirectories: (dir) => listSourceDirectories(source, dir),
+    createDirectory: (parent, name) => createSourceDirectory(source, parent, name),
+  });
+
   const runNewCodexAndReturn = (cwd, args = []) => {
-    const resolvedCwd = usableCwd(cwd);
+    const source = currentSource();
+    const resolvedCwd = source.remote ? cwd : usableCwd(cwd);
     screen.leave();
     let status = 0;
     try {
-      status = runNewCodexSession(resolvedCwd, args);
+      status = runSourceNewSession(source, resolvedCwd, args);
     } finally {
       screen.enter();
     }
-    if (status === 0) refreshAfterAction(`New session finished in ${resolvedCwd}.`, false, resolvedCwd);
-    else refreshAfterAction(`new session exited with code ${status}.`, true, resolvedCwd);
+    const label = source.remote ? `${source.label}: ${resolvedCwd}` : resolvedCwd;
+    if (status === 0) refreshAfterAction(`New session finished in ${label}.`, false, resolvedCwd, source.id);
+    else refreshAfterAction(`new session exited with code ${status}.`, true, resolvedCwd, source.id);
     return status;
   };
 
@@ -383,7 +454,7 @@ async function runWorkbench() {
   };
 
   reload();
-  setMessage('Ready');
+  if (!sourceErrors.length) setMessage('Ready');
   applyLayout();
   syncProjects();
   syncList();
@@ -515,7 +586,8 @@ async function runWorkbench() {
   screen.key(['n'], async () => {
     if (promptOpen()) return;
     if (activePanel === 'projects') {
-      const dir = await directoryPicker.ask(currentProjectCwd());
+      const source = currentSource();
+      const dir = await directoryPicker.ask(currentDirectoryStart(), directoryOpsForSource(source));
       if (!dir) {
         setMessage('New project cancelled.');
         return render();
@@ -529,15 +601,15 @@ async function runWorkbench() {
   screen.key(['r'], () => runAction(async (session) => {
     const name = await askInput('Name', session.name || '');
     if (name === null) return render();
-    updateMetadata(session, { name });
-    refreshAfterAction('Renamed.');
+    const status = updateSourceMetadata(session, { name });
+    refreshAfterAction(status === 0 ? 'Renamed.' : `rename exited with code ${status}.`, status !== 0);
   }));
 
   screen.key(['o'], () => runAction(async (session) => {
     const note = await askInput('Note', session.note || '');
     if (note === null) return render();
-    updateMetadata(session, { note });
-    refreshAfterAction('Note saved.');
+    const status = updateSourceMetadata(session, { note });
+    refreshAfterAction(status === 0 ? 'Note saved.' : `note exited with code ${status}.`, status !== 0);
   }));
 
   screen.key(['a'], () => runAction((session) => {
@@ -552,6 +624,14 @@ async function runWorkbench() {
     }
     const status = runCodexAndReturn('delete', session, ['--force'], `Deleted ${shortId(session.id)}.`);
     if (status !== 0) {
+      if (session.sourceRemote) {
+        const hideSession = await askConfirm(`Remote delete failed for ${shortId(session.id)}. Hide from remote workbench instead?`);
+        if (hideSession) {
+          updateSourceMetadata(session, { hidden: true });
+          refreshAfterAction(`Hidden ${shortId(session.id)}.`);
+        }
+        return;
+      }
       const removeFile = await askConfirm(`Codex could not delete ${shortId(session.id)}. Delete its session file?`);
       if (removeFile) {
         deleteSessionFile(session);
@@ -560,7 +640,7 @@ async function runWorkbench() {
       }
       const hideSession = await askConfirm(`Hide ${shortId(session.id)} from workbench instead?`);
       if (hideSession) {
-        updateMetadata(session, { hidden: true });
+        updateSourceMetadata(session, { hidden: true });
         refreshAfterAction(`Hidden ${shortId(session.id)}.`);
       }
     }

@@ -116,6 +116,20 @@ result = run(['list', '--cwd']);
 assert.strictEqual(result.status, 1);
 assert.match(result.stderr, /--cwd requires a directory/);
 
+const dirsRoot = path.join(tmp, 'dirs-root');
+fs.mkdirSync(path.join(dirsRoot, 'child'), { recursive: true });
+result = run(['dirs', '--cwd', dirsRoot, '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+let dirsPayload = JSON.parse(result.stdout);
+assert.strictEqual(dirsPayload.cwd, dirsRoot);
+assert.deepStrictEqual(dirsPayload.entries, [{ name: 'child', path: path.join(dirsRoot, 'child') }]);
+
+result = run(['mkdir', '--cwd', dirsRoot, '--json', 'new-child']);
+assert.strictEqual(result.status, 0, result.stderr);
+dirsPayload = JSON.parse(result.stdout);
+assert.strictEqual(dirsPayload.path, path.join(dirsRoot, 'new-child'));
+assert.strictEqual(fs.statSync(dirsPayload.path).isDirectory(), true);
+
 result = run(['hide', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);
 result = run(['list', '--json']);

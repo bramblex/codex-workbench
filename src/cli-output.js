@@ -15,6 +15,8 @@ Usage:
   codex-workbench rename <session> <name>
   codex-workbench note <session> <note>
   codex-workbench new [--cwd <dir>] [prompt...]
+  codex-workbench dirs [--cwd <dir>] [--json]
+  codex-workbench mkdir [--cwd <dir>] <name> [--json]
   codex-workbench resume <session> [prompt...]
   codex-workbench fork <session>
   codex-workbench archive <session>
@@ -27,6 +29,7 @@ Environment:
   CODEX_HOME            default: ~/.codex
   CODEX_SESSIONS_DIR    default: $CODEX_HOME/sessions
   CODEX_WORKBENCH_META  default: $CODEX_HOME/codex-workbench.json
+  CODEX_WORKBENCH_CONFIG default: $CODEX_HOME/codex-workbench.config.json
   CODEX_BIN             default: codex from shell PATH
 `);
 }
@@ -43,12 +46,14 @@ function printList(sessions, opts = {}) {
   }
   const groups = new Map();
   for (const session of filtered) {
-    if (!groups.has(session.cwd)) groups.set(session.cwd, []);
-    groups.get(session.cwd).push(session);
+    const source = session.sourceLabel || '';
+    const key = `${source}\0${session.cwd}`;
+    if (!groups.has(key)) groups.set(key, { source, cwd: session.cwd, sessions: [] });
+    groups.get(key).sessions.push(session);
   }
-  for (const [cwd, group] of groups) {
-    console.log(`\n${cwd}`);
-    for (const session of group) {
+  for (const group of groups.values()) {
+    console.log(`\n${group.source ? `${group.source}: ` : ''}${group.cwd}`);
+    for (const session of group.sessions) {
       const label = session.name || truncate(session.first || session.last || '(no prompt)', 56);
       const flags = [session.archived ? 'archived' : '', session.hidden ? 'hidden' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
       console.log(`  ${shortId(session.id)}  ${localTime(session.updatedAt)}  ${String(session.turns).padStart(2)} turns  ${flags ? `[${flags}] ` : ''}${label}`);
@@ -60,10 +65,11 @@ function printList(sessions, opts = {}) {
 function printShow(session) {
   console.log(`${session.name || '(unnamed)'} ${session.archived ? '[archived]' : ''}${session.hidden ? '[hidden]' : ''}`);
   console.log(`id:       ${session.id}`);
+  if (session.sourceLabel) console.log(`source:   ${session.sourceLabel}`);
   console.log(`cwd:      ${session.cwd}`);
   console.log(`started:  ${localTime(session.startedAt)}`);
   console.log(`updated:  ${localTime(session.updatedAt)}`);
-  console.log(`file:     ${session.file}`);
+  if (session.file) console.log(`file:     ${session.file}`);
   console.log(`turns:    ${session.turns}`);
   if (session.note) console.log(`note:     ${session.note}`);
   console.log('\nMessages:');

@@ -16,8 +16,10 @@ const {
 const {
   runCodexCommand,
   runNewCodexSession,
+  usableCwd,
 } = require('./services/codex-runner');
 const { runWorkbench } = require('./ui/workbench');
+const { createChildDirectory, listDirectories } = require('./model/directories');
 
 function parseFlags(args) {
   const out = { _: [] };
@@ -42,6 +44,21 @@ async function main() {
 
   const flags = parseFlags(rest);
   if (cmd === 'doctor') return printDoctor();
+  if (cmd === 'dirs') {
+    const payload = listDirectories(flags.cwd || process.cwd(), usableCwd);
+    if (flags.json) console.log(JSON.stringify(payload, null, 2));
+    else {
+      console.log(payload.cwd);
+      for (const entry of payload.entries) console.log(entry.path);
+    }
+    return undefined;
+  }
+  if (cmd === 'mkdir') {
+    const target = createChildDirectory(usableCwd(flags.cwd || process.cwd()), flags._[0] || '');
+    if (flags.json) console.log(JSON.stringify({ path: target }, null, 2));
+    else console.log(target);
+    return undefined;
+  }
 
   const sessions = listSessions();
 

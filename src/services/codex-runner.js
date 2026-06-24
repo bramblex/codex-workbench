@@ -49,7 +49,7 @@ function runCodexArgv(argv, cwd, inherit = false) {
   }
   const result = spawnSync(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
   if (result.error) throw new Error(`failed to start codex: ${result.error.message}`);
-  const status = result.status || 0;
+  const status = typeof result.status === 'number' ? result.status : 1;
   process.exitCode = status;
   return status;
 }

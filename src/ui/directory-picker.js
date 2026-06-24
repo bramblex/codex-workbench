@@ -1,20 +1,17 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 const blessed = require('blessed');
+const { createChildDirectory, directoryNameError, listDirectories } = require('../model/directories');
 
 const DEFAULT_HELP = '↑/↓ move  ←/h parent  →/l child  n new directory  Enter choose selected  Esc/q cancel';
 
-function directoryNameError(name) {
-  if (!name) return 'Directory name is required.';
-  if (name === '.' || name === '..') return 'Directory name cannot be . or ..';
-  if (path.isAbsolute(name)) return 'Directory name must be relative.';
-  if (name.includes('/') || name.includes('\\') || name.includes('\0')) return 'Directory name cannot contain path separators.';
-  return '';
-}
+const DEFAULT_OPS = {
+  listDirectories: (dir) => listDirectories(dir),
+  createDirectory: (parent, name) => createChildDirectory(parent, name),
+};
 
-function createDirectoryPicker({ screen, askInput, focusOnClose, usableCwd, truncate }) {
+function createDirectoryPicker({ screen, askInput, focusOnClose, truncate }) {
   const list = blessed.list({
     parent: screen,
     label: ' Choose directory ',
@@ -57,21 +54,16 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, usableCwd, trun
   };
 
   const entriesFor = (dir) => {
-    const resolved = usableCwd(dir);
+    const payload = state.ops.listDirectories(dir);
+    const resolved = payload.cwd;
     const entries = [{ label: `./  ${resolved}`, path: resolved, type: 'current' }];
-    let children = [];
-    try {
-      children = fs.readdirSync(resolved, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => ({
-          label: `${entry.name}/`,
-          path: path.join(resolved, entry.name),
-          type: 'child',
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label));
-    } catch {
-      children = [];
-    }
+    const children = (payload.entries || [])
+      .map((entry) => ({
+        label: `${entry.name || path.basename(entry.path)}/`,
+        path: entry.path,
+        type: 'child',
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
     return entries.concat(children);
   };
 
@@ -95,8 +87,15 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, usableCwd, trun
 
   const render = (dir, selectedPath = null) => {
     if (!state) return;
-    const resolved = usableCwd(dir);
-    const entries = entriesFor(resolved);
+    let entries = [];
+    try {
+      entries = entriesFor(dir);
+    } catch (err) {
+      setHelp(`error: ${err.message}`, true);
+      screen.render();
+      return;
+    }
+    const resolved = entries[0] ? entries[0].path : dir;
     const selectedIndex = Math.max(0, entries.findIndex((entry) => selectedPath && entry.path === selectedPath));
     state.dir = resolved;
     state.entries = entries;
@@ -143,9 +142,9 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, usableCwd, trun
       return;
     }
 
-    const target = path.join(parent, name);
+    let target = '';
     try {
-      fs.mkdirSync(target);
+      target = state.ops.createDirectory(parent, name);
     } catch (err) {
       setHelp(`error: ${err.message}`, true);
       screen.render();
@@ -157,8 +156,8 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, usableCwd, trun
     screen.render();
   };
 
-  const ask = (startDir) => new Promise((resolve) => {
-    state = { resolve, dir: usableCwd(startDir), entries: [] };
+  const ask = (startDir, ops = DEFAULT_OPS) => new Promise((resolve) => {
+    state = { resolve, dir: startDir, entries: [], ops };
     render(startDir);
     list.show();
     help.show();
