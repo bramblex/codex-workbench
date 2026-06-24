@@ -475,6 +475,8 @@ async function ui() {
     style: { border: { fg: 'red' }, fg: 'white', bg: 'black' },
   });
 
+  const DIRECTORY_PICKER_HELP = '↑/↓ move  ←/h parent  →/l child  n new directory  Enter choose selected  Esc/q cancel';
+
   const directoryPicker = blessed.list({
     parent: screen,
     label: ' Choose directory ',
@@ -503,7 +505,7 @@ async function ui() {
     height: 3,
     border: 'line',
     padding: { left: 1, right: 1 },
-    content: '↑/↓ move  ←/h parent  →/l child  Enter choose selected  Esc/q cancel',
+    content: DIRECTORY_PICKER_HELP,
     style: { border: { fg: 'green' }, fg: 'white', bg: 'black' },
   });
 
@@ -652,7 +654,7 @@ async function ui() {
     } else if (detailFocused) {
       status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  n new session  ← sessions  → projects  Tab focus  q quit`);
     } else {
-      status.setContent(`${firstLine}\nSessions: ↑/↓ select  n new session  R rename  Enter/r resume  f fork  v view  o note  a archive  d delete  q quit`);
+      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter resume  r rename  n new session  f fork  v view  o note  a archive  d delete  q quit`);
     }
   };
 
@@ -673,10 +675,12 @@ async function ui() {
   };
 
   const askInput = (label, initial = '') => new Promise((resolve) => {
+    prompt.setFront();
     prompt.input(label, initial, (err, value) => resolve(err ? null : value));
   });
 
   const askConfirm = (label) => new Promise((resolve) => {
+    question.setFront();
     question.ask(label, (err, answer) => resolve(!err && Boolean(answer)));
   });
 
@@ -697,6 +701,11 @@ async function ui() {
       children = [];
     }
     return entries.concat(children);
+  };
+
+  const setDirectoryPickerHelp = (text = DIRECTORY_PICKER_HELP, isError = false) => {
+    directoryPickerHelp.setContent(text);
+    directoryPickerHelp.style.fg = isError ? 'red' : 'white';
   };
 
   const applyDirectoryPickerLayout = () => {
@@ -725,6 +734,7 @@ async function ui() {
     directoryPickerState.dir = resolved;
     directoryPickerState.entries = entries;
     applyDirectoryPickerLayout();
+    setDirectoryPickerHelp();
     directoryPicker.setLabel(` Choose directory: ${truncate(resolved, Math.max(24, (screen.width || 80) - 20))} `);
     directoryPicker.clearItems();
     directoryPicker.setItems(entries.map((entry) => entry.label));
@@ -750,6 +760,45 @@ async function ui() {
     directoryPicker.focus();
     screen.render();
   });
+
+  const directoryNameError = (name) => {
+    if (!name) return 'Directory name is required.';
+    if (name === '.' || name === '..') return 'Directory name cannot be . or ..';
+    if (path.isAbsolute(name)) return 'Directory name must be relative.';
+    if (name.includes('/') || name.includes('\\') || name.includes('\0')) return 'Directory name cannot contain path separators.';
+    return '';
+  };
+
+  const createDirectoryFromPicker = async () => {
+    if (!directoryPickerState) return;
+    const parent = directoryPickerState.dir;
+    const rawName = await askInput('New directory name', '');
+    directoryPicker.focus();
+    if (rawName === null) {
+      screen.render();
+      return;
+    }
+    const name = rawName.trim();
+    const validationError = directoryNameError(name);
+    if (validationError) {
+      setDirectoryPickerHelp(`error: ${validationError}`, true);
+      screen.render();
+      return;
+    }
+
+    const target = path.join(parent, name);
+    try {
+      fs.mkdirSync(target);
+    } catch (err) {
+      setDirectoryPickerHelp(`error: ${err.message}`, true);
+      screen.render();
+      return;
+    }
+
+    renderDirectoryPicker(target);
+    setDirectoryPickerHelp(`Created ${name}. Enter choose selected, ← parent, n new directory.`);
+    screen.render();
+  };
 
   const leaveScreen = () => {
     screen.destroy();
@@ -872,6 +921,10 @@ async function ui() {
     screen.render();
   });
 
+  directoryPicker.key(['n'], () => {
+    createDirectoryFromPicker();
+  });
+
   directoryPicker.key(['escape', 'q'], () => {
     closeDirectoryPicker(null);
   });
@@ -922,7 +975,7 @@ async function ui() {
     screen.render();
   });
 
-  sessionsList.on('select', () => runAction((session) => {
+  sessionsList.key(['enter'], () => runAction((session) => {
     runCodexAndReturn('resume', session);
   }));
 
@@ -986,10 +1039,6 @@ async function ui() {
     process.exit(0);
   });
 
-  screen.key(['r'], () => runAction((session) => {
-    runCodexAndReturn('resume', session);
-  }));
-
   screen.key(['f'], () => runAction((session) => {
     runCodexAndReturn('fork', session);
   }));
@@ -1014,7 +1063,7 @@ async function ui() {
     runNewCodexAndReturn(currentProjectCwd());
   });
 
-  screen.key(['R', 'S-r'], () => runAction(async (session) => {
+  screen.key(['r'], () => runAction(async (session) => {
     const name = await askInput('Name', session.name || '');
     if (name === null) return render();
     updateMetadata(session, { name });

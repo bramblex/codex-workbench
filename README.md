@@ -110,17 +110,19 @@ The UI groups sessions by working directory, with projects on the left, sessions
 
 Common keys:
 
-- `Enter` or `r`: resume the selected session in Codex
+- `Enter`: resume the selected session in Codex
 - `n`: create a new project/session from Projects, or a new session from Sessions/Details
 - `f`: fork the selected session
 - `v`: print session details and exit
-- `R`: rename the selected session
+- `r`: rename the selected session
 - `o`: add or edit a note
 - `a`: archive the selected session
 - `d`: delete the selected session
 - `Tab`: switch focus between projects, sessions, and details
 - `Left`/`Right` or `h`/`l`: move between panes
 - `q`, `Esc`, or `Ctrl+C`: quit
+
+In the directory picker, use `Up`/`Down` or `j`/`k` to move, `Left`/`h` for the parent directory, `Right`/`l` for the selected child directory, `n` to create a child directory, and `Enter` to choose the selected directory.
 
 ## Environment
 
