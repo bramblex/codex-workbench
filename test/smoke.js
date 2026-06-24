@@ -102,6 +102,15 @@ assert.strictEqual(sessions.length, 2);
 const mainSession = sessions.find((session) => session.id === 'abcdef1234567890');
 assert.ok(mainSession);
 assert.strictEqual(mainSession.first, 'Fix the project');
+assert.ok(Array.isArray(mainSession.messages));
+
+result = run(['list', '--json', '--compact']);
+assert.strictEqual(result.status, 0, result.stderr);
+const compactSessions = JSON.parse(result.stdout);
+const compactSession = compactSessions.find((session) => session.id === 'abcdef1234567890');
+assert.ok(compactSession);
+assert.strictEqual(compactSession.first, 'Fix the project');
+assert.strictEqual(Object.prototype.hasOwnProperty.call(compactSession, 'messages'), false);
 
 result = run(['show', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);

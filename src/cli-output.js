@@ -10,7 +10,7 @@ function usage() {
 Usage:
   codex-workbench [ui]
   codex-workbench doctor
-  codex-workbench list [--json] [--cwd <dir>] [--all]
+  codex-workbench list [--json] [--compact] [--cwd <dir>] [--all]
   codex-workbench show <session>
   codex-workbench rename <session> <name>
   codex-workbench note <session> <note>
@@ -41,7 +41,8 @@ function printList(sessions, opts = {}) {
     return true;
   });
   if (opts.json) {
-    console.log(JSON.stringify(filtered, null, 2));
+    const payload = opts.compact ? filtered.map(compactSession) : filtered;
+    console.log(JSON.stringify(payload, null, 2));
     return;
   }
   const groups = new Map();
@@ -62,6 +63,11 @@ function printList(sessions, opts = {}) {
   if (!filtered.length) console.log('No sessions found.');
 }
 
+function compactSession(session) {
+  const { messages, ...compact } = session;
+  return compact;
+}
+
 function printShow(session) {
   console.log(`${session.name || '(unnamed)'} ${session.archived ? '[archived]' : ''}${session.hidden ? '[hidden]' : ''}`);
   console.log(`id:       ${session.id}`);
@@ -73,7 +79,7 @@ function printShow(session) {
   console.log(`turns:    ${session.turns}`);
   if (session.note) console.log(`note:     ${session.note}`);
   console.log('\nMessages:');
-  for (const msg of session.messages) {
+  for (const msg of session.messages || []) {
     if (msg.role === 'developer') continue;
     const prefix = msg.role === 'assistant' ? 'A' : msg.role === 'user' ? 'U' : msg.role.slice(0, 1).toUpperCase();
     console.log(`  ${prefix}: ${truncate(msg.text, 180)}`);
@@ -102,6 +108,7 @@ function printDoctor() {
 }
 
 module.exports = {
+  compactSession,
   printDoctor,
   printList,
   printShow,

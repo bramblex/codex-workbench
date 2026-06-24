@@ -27,6 +27,7 @@ function parseFlags(args) {
     const arg = args[i];
     if (arg === '--json') out.json = true;
     else if (arg === '--all') out.all = true;
+    else if (arg === '--compact') out.compact = true;
     else if (arg === '--force') out.force = true;
     else if (arg === '--file') out.file = true;
     else if (arg === '--cwd') {

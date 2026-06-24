@@ -48,7 +48,7 @@ function loadWorkbenchSessions() {
 
   for (const source of sources.filter((candidate) => candidate.remote)) {
     try {
-      const remoteSessions = runRemoteCwbJson(source, ['list', '--json']);
+      const remoteSessions = runRemoteCwbJson(source, ['list', '--json', '--compact']);
       if (!Array.isArray(remoteSessions)) throw new Error('remote list did not return an array');
       sessions.push(...remoteSessions.map((session) => attachSource(session, source)));
     } catch (err) {

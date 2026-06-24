@@ -40,7 +40,7 @@ codex-workbench list
 ```sh
 codex-workbench [ui]
 codex-workbench doctor
-codex-workbench list [--json] [--cwd <dir>] [--all]
+codex-workbench list [--json] [--compact] [--cwd <dir>] [--all]
 codex-workbench show <session>
 codex-workbench rename <session> <name>
 codex-workbench note <session> <note>
@@ -73,9 +73,12 @@ Use `list` to find sessions:
 ```sh
 codex-workbench list
 codex-workbench list --json
+codex-workbench list --json --compact
 codex-workbench list --cwd /path/to/project
 codex-workbench list --all
 ```
+
+Use `--compact` with `--json` when another tool only needs session summaries. It omits the full message history and keeps remote SSH listings small.
 
 Use `new` to start a fresh Codex session in a project directory:
 

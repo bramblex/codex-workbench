@@ -21,13 +21,19 @@ function runRemoteCwb(server, argv, opts = {}) {
   return spawnSync('ssh', args, {
     encoding: opts.encoding,
     env: process.env,
+    maxBuffer: opts.maxBuffer || 64 * 1024 * 1024,
     stdio: opts.stdio || (opts.encoding ? ['ignore', 'pipe', 'pipe'] : 'inherit'),
   });
 }
 
 function runRemoteCwbJson(server, argv) {
   const result = runRemoteCwb(server, argv, { encoding: 'utf8' });
-  if (result.error) throw result.error;
+  if (result.error) {
+    if (result.error.code === 'ENOBUFS') {
+      throw new Error('remote output exceeded buffer; update the remote codex-workbench so compact listing is available');
+    }
+    throw result.error;
+  }
   if (result.status !== 0) {
     const stderr = (result.stderr || '').trim();
     throw new Error(stderr || `ssh exited with code ${result.status}`);

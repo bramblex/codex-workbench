@@ -38,7 +38,7 @@ for arg do
 done
 
 case "$last" in
-  *"'list'"*"'--json'"*)
+  *"'list'"*"'--json'"*"'--compact'"*)
     printf '%s\\n' '[{"id":"remote-123","cwd":"/srv/app","updatedAt":"2026-06-24T00:00:00.000Z","startedAt":"2026-06-24T00:00:00.000Z","turns":1,"first":"remote prompt","last":"remote prompt","lastAssistant":"remote answer","messages":[]}]'
     ;;
   *"'dirs'"*"'--json'"*)
@@ -90,7 +90,7 @@ assert.strictEqual(runSourceSessionCommand(session, 'resume', ['hello']), 0);
 assert.strictEqual(runSourceNewSession(source, '/srv/app', ['start here']), 0);
 
 const log = fs.readFileSync(sshLog, 'utf8');
-assert.match(log, /\tserver-a\t'cwb' 'list' '--json'/);
+assert.match(log, /\tserver-a\t'cwb' 'list' '--json' '--compact'/);
 assert.match(log, /\tserver-a\t'cwb' 'dirs' '--cwd' '\/srv\/app' '--json'/);
 assert.match(log, /\tserver-a\t'cwb' 'mkdir' '--cwd' '\/srv\/app' '--json' 'new-dir'/);
 assert.match(log, /\tserver-a\t'cwb' 'rename' 'remote-123' 'Named remote'/);
