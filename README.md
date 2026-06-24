@@ -111,7 +111,7 @@ Most commands accept a full session id, a unique prefix, a saved name, or a sess
 
 ## Interactive UI
 
-The UI groups sessions by source and working directory, with sources/projects on the left, sessions on the upper right, and details below. When you start or resume a session, Codex temporarily takes over the terminal; when Codex exits, codex-workbench redraws the UI.
+The UI groups sessions by source and working directory, with sources/projects on the left, sessions on the upper right, and details below. Local sessions render immediately, while remote SSH sources load in the background. When you start or resume a session, Codex temporarily takes over the terminal; when Codex exits, codex-workbench redraws the UI.
 
 Common keys:
 

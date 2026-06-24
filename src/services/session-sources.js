@@ -5,7 +5,7 @@ const { createChildDirectory, listDirectories } = require('../model/directories'
 const { listSessions, updateMetadata } = require('../model/session-store');
 const { listServers } = require('../model/workbench-config');
 const { runCodexCommand, runNewCodexSession, usableCwd } = require('./codex-runner');
-const { runRemoteCwb, runRemoteCwbJson } = require('./ssh-runner');
+const { runRemoteCwb, runRemoteCwbJson, runRemoteCwbJsonAsync } = require('./ssh-runner');
 
 const LOCAL_SOURCE = {
   id: 'local',
@@ -41,9 +41,26 @@ function configuredSources() {
   return [LOCAL_SOURCE, ...listServers().map(sourceForServer)];
 }
 
+function sortSessions(sessions) {
+  sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  return sessions;
+}
+
+function loadLocalWorkbenchSessions(sources = configuredSources()) {
+  const sessions = listSessions().map((session) => attachSource(session, LOCAL_SOURCE));
+  return { errors: [], sessions, sources };
+}
+
+function loadRemoteSourceSessions(source) {
+  return runRemoteCwbJsonAsync(source, ['list', '--json', '--compact']).then((remoteSessions) => {
+    if (!Array.isArray(remoteSessions)) throw new Error('remote list did not return an array');
+    return remoteSessions.map((session) => attachSource(session, source));
+  });
+}
+
 function loadWorkbenchSessions() {
   const sources = configuredSources();
-  const sessions = listSessions().map((session) => attachSource(session, LOCAL_SOURCE));
+  const sessions = loadLocalWorkbenchSessions(sources).sessions;
   const errors = [];
 
   for (const source of sources.filter((candidate) => candidate.remote)) {
@@ -56,7 +73,7 @@ function loadWorkbenchSessions() {
     }
   }
 
-  sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  sortSessions(sessions);
   return { errors, sessions, sources };
 }
 
@@ -139,6 +156,8 @@ module.exports = {
   configuredSources,
   createSourceDirectory,
   listSourceDirectories,
+  loadLocalWorkbenchSessions,
+  loadRemoteSourceSessions,
   loadWorkbenchSessions,
   runSourceNewSession,
   runSourceSessionCommand,

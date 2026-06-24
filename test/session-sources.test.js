@@ -60,6 +60,7 @@ process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 const {
   createSourceDirectory,
   listSourceDirectories,
+  loadRemoteSourceSessions,
   loadWorkbenchSessions,
   runSourceNewSession,
   runSourceSessionCommand,
@@ -96,3 +97,16 @@ assert.match(log, /\tserver-a\t'cwb' 'mkdir' '--cwd' '\/srv\/app' '--json' 'new-
 assert.match(log, /\tserver-a\t'cwb' 'rename' 'remote-123' 'Named remote'/);
 assert.match(log, /\t-t\tserver-a\t'cwb' 'resume' 'remote-123' 'hello'/);
 assert.match(log, /\t-t\tserver-a\t'cwb' 'new' '--cwd' '\/srv\/app' 'start here'/);
+
+loadRemoteSourceSessions(source)
+  .then((remoteSessions) => {
+    assert.strictEqual(remoteSessions.length, 1);
+    assert.strictEqual(remoteSessions[0].sourceId, 'a');
+    assert.strictEqual(remoteSessions[0].first, 'remote prompt');
+    const asyncLog = fs.readFileSync(sshLog, 'utf8');
+    assert.match(asyncLog, /\tserver-a\t'cwb' 'list' '--json' '--compact'/);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

@@ -9,6 +9,8 @@ const {
   LOCAL_SOURCE,
   createSourceDirectory,
   listSourceDirectories,
+  loadLocalWorkbenchSessions,
+  loadRemoteSourceSessions,
   loadWorkbenchSessions,
   runSourceNewSession,
   runSourceSessionCommand,
@@ -34,6 +36,9 @@ async function runWorkbench() {
   let syncingProjects = false;
   let projectWidth = 32;
   let activePanel = 'projects';
+  let remoteLoadId = 0;
+  let remoteLoading = false;
+  let closed = false;
 
   const screen = blessed.screen({
     smartCSR: true,
@@ -159,6 +164,17 @@ async function runWorkbench() {
 
   const currentGroup = () => groups[groupIndex] || groups[0] || { kind: 'all', source: null, cwd: null };
 
+  const groupKey = (group) => {
+    if (!group || group.kind === 'all') return 'all';
+    if (group.kind === 'source') return `source:${group.source.id}`;
+    return `project:${group.source.id}:${group.cwd}`;
+  };
+
+  const restoreGroupKey = (key) => {
+    const index = groups.findIndex((group) => groupKey(group) === key);
+    if (index !== -1) groupIndex = index;
+  };
+
   const currentSessions = () => {
     const group = currentGroup();
     if (group.kind === 'all') return sessions;
@@ -220,20 +236,101 @@ async function runWorkbench() {
     status.style.fg = isError ? 'red' : 'white';
   };
 
-  const reload = () => {
-    const state = loadWorkbenchSessions();
-    sources = state.sources;
-    sourceErrors = state.errors;
-    sessions = state.sessions.filter((s) => !s.archived && !s.hidden);
+  const visibleSession = (session) => !session.archived && !session.hidden;
+
+  const sortSessionList = (list) => {
+    list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    return list;
+  };
+
+  const setSourceErrorMessage = () => {
+    if (!sourceErrors.length) return false;
+    const first = sourceErrors[0];
+    const detail = `${first.source.label}: ${first.error}`;
+    const prefix = sourceErrors.length === 1 ? 'Remote source failed' : `${sourceErrors.length} remote sources failed`;
+    setMessage(`${prefix}: ${truncate(detail, 100)}`, true);
+    return true;
+  };
+
+  const updateSessionViews = (preferredGroupKey = groupKey(currentGroup())) => {
     groups = buildGroups();
+    restoreGroupKey(preferredGroupKey);
     if (groupIndex >= groups.length) groupIndex = Math.max(0, groups.length - 1);
     const visible = currentSessions();
     if (selected >= visible.length) selected = Math.max(0, visible.length - 1);
-    if (sourceErrors.length && (!message || message === 'Ready')) {
-      const first = sourceErrors[0];
-      const detail = `${first.source.label}: ${first.error}`;
-      const prefix = sourceErrors.length === 1 ? 'Remote source failed' : `${sourceErrors.length} remote sources failed`;
-      setMessage(`${prefix}: ${truncate(detail, 100)}`, true);
+  };
+
+  const reloadLocal = (preserveRemote = true) => {
+    const preferredGroupKey = groupKey(currentGroup());
+    const state = loadLocalWorkbenchSessions();
+    const sourceIds = new Set(state.sources.map((source) => source.id));
+    const remoteSessions = preserveRemote
+      ? sessions.filter((session) => session.sourceRemote && sourceIds.has(session.sourceId))
+      : [];
+    sources = state.sources;
+    sourceErrors = sourceErrors.filter((item) => sourceIds.has(item.source.id));
+    sessions = sortSessionList([...state.sessions, ...remoteSessions].filter(visibleSession));
+    updateSessionViews(preferredGroupKey);
+  };
+
+  const replaceSourceSessions = (source, sourceSessions) => {
+    const preferredGroupKey = groupKey(currentGroup());
+    sessions = sortSessionList([
+      ...sessions.filter((session) => session.sourceId !== source.id),
+      ...sourceSessions.filter(visibleSession),
+    ]);
+    updateSessionViews(preferredGroupKey);
+  };
+
+  const renderRemoteUpdate = () => {
+    if (closed) return;
+    syncProjects();
+    syncList();
+    render();
+  };
+
+  const startRemoteReload = (quiet = false) => {
+    const remoteSources = sources.filter((source) => source.remote);
+    remoteLoadId += 1;
+    const loadId = remoteLoadId;
+    sourceErrors = [];
+    if (!remoteSources.length) {
+      remoteLoading = false;
+      return;
+    }
+
+    remoteLoading = true;
+    let completed = 0;
+    if (!quiet && (!message || message === 'Ready')) {
+      setMessage(`Loading ${remoteSources.length} remote source${remoteSources.length === 1 ? '' : 's'}...`);
+      renderRemoteUpdate();
+    }
+
+    for (const source of remoteSources) {
+      loadRemoteSourceSessions(source)
+        .then((sourceSessions) => {
+          if (closed || loadId !== remoteLoadId) return;
+          replaceSourceSessions(source, sourceSessions);
+        })
+        .catch((err) => {
+          if (closed || loadId !== remoteLoadId) return;
+          sourceErrors.push({ source, error: err.message });
+        })
+        .finally(() => {
+          if (closed || loadId !== remoteLoadId) return;
+          completed += 1;
+          remoteLoading = completed < remoteSources.length;
+          if (remoteLoading) {
+            if (!quiet && message.startsWith('Loading ')) {
+              setMessage(`Loading remote sources... ${completed}/${remoteSources.length}`);
+            }
+          } else if (sourceErrors.length) {
+            setSourceErrorMessage();
+          } else if (message.startsWith('Loading ')) {
+            setMessage('Remote sources loaded.');
+          }
+          renderRemoteUpdate();
+        });
     }
   };
 
@@ -356,12 +453,13 @@ async function runWorkbench() {
   const promptOpen = () => prompt.visible || question.visible || directoryPicker.isOpen();
 
   const leaveScreen = () => {
+    closed = true;
     screen.destroy();
   };
 
   const refreshAfterAction = (text, isError = false, focusCwd = null, focusSourceId = null) => {
     setMessage(text, isError);
-    reload();
+    reloadLocal();
     if (focusCwd) {
       const nextGroupIndex = groups.findIndex((group) => {
         return group.kind === 'project' &&
@@ -373,6 +471,7 @@ async function runWorkbench() {
     syncProjects();
     syncList();
     render();
+    startRemoteReload(true);
   };
 
   const selectGroup = (index) => {
@@ -453,8 +552,9 @@ async function runWorkbench() {
     }
   };
 
-  reload();
-  if (!sourceErrors.length) setMessage('Ready');
+  reloadLocal(false);
+  const remoteSourceCount = sources.filter((source) => source.remote).length;
+  setMessage(remoteSourceCount ? `Loading ${remoteSourceCount} remote source${remoteSourceCount === 1 ? '' : 's'}...` : 'Ready');
   applyLayout();
   syncProjects();
   syncList();
@@ -648,6 +748,7 @@ async function runWorkbench() {
 
   projectsList.focus();
   render();
+  startRemoteReload(true);
 
   return new Promise(() => {});
 }
