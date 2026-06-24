@@ -338,6 +338,8 @@ async function ui() {
   let selected = 0;
   let message = '';
   let syncingList = false;
+  let syncingProjects = false;
+  let projectWidth = 32;
 
   const screen = blessed.screen({
     smartCSR: true,
@@ -356,28 +358,30 @@ async function ui() {
     content: 'Codex Workbench',
   });
 
-  const groupsBar = blessed.box({
+  const projectsList = blessed.list({
     parent: screen,
     label: ' Projects ',
     top: 3,
     left: 0,
-    right: 0,
-    height: 3,
+    width: projectWidth,
+    bottom: 3,
     border: 'line',
-    padding: { left: 1, right: 1 },
-    tags: true,
-    parseTags: true,
+    mouse: true,
+    keys: true,
+    vi: false,
+    scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'green' } },
     style: {
       border: { fg: 'green' },
-      fg: 'white',
+      selected: { fg: 'black', bg: 'green', bold: true },
+      item: { fg: 'white' },
     },
   });
 
   const sessionsList = blessed.list({
     parent: screen,
     label: ' Sessions ',
-    top: 6,
-    left: 0,
+    top: 3,
+    left: projectWidth,
     right: 0,
     height: '40%',
     border: 'line',
@@ -396,7 +400,7 @@ async function ui() {
     parent: screen,
     label: ' Details ',
     top: '50%',
-    left: 0,
+    left: projectWidth,
     right: 0,
     bottom: 3,
     border: 'line',
@@ -457,49 +461,11 @@ async function ui() {
     return `${path.basename(group) || group} (${count})`;
   };
 
-  const tagText = (text) => String(text).replace(/[{}]/g, '');
-
-  const groupsContent = () => {
-    if (!groups.length) return '';
-    const width = Math.max(20, (screen.width || 80) - 4);
-    const labels = groups.map((group, index) => {
-      const max = index === groupIndex ? 34 : 24;
-      return tagText(truncate(groupLabel(group), max));
-    });
-    const chipWidth = (index) => labels[index].length + 2;
-    let start = groupIndex;
-    let end = groupIndex;
-    let used = chipWidth(groupIndex);
-
-    while (start > 0 || end < groups.length - 1) {
-      const reserve = (start > 0 ? 4 : 0) + (end < groups.length - 1 ? 4 : 0);
-      const leftCost = start > 0 ? chipWidth(start - 1) + 2 : Infinity;
-      const rightCost = end < groups.length - 1 ? chipWidth(end + 1) + 2 : Infinity;
-      const preferLeft = groupIndex - start <= end - groupIndex;
-      const firstCost = preferLeft ? leftCost : rightCost;
-      const secondCost = preferLeft ? rightCost : leftCost;
-
-      if (used + firstCost + reserve <= width) {
-        if (preferLeft) start -= 1;
-        else end += 1;
-        used += firstCost;
-      } else if (used + secondCost + reserve <= width) {
-        if (preferLeft) end += 1;
-        else start -= 1;
-        used += secondCost;
-      } else {
-        break;
-      }
-    }
-
-    const parts = [];
-    if (start > 0) parts.push('...');
-    for (let index = start; index <= end; index += 1) {
-      const label = ` ${labels[index]} `;
-      parts.push(index === groupIndex ? `{black-fg}{cyan-bg}{bold}${label}{/bold}{/cyan-bg}{/black-fg}` : label);
-    }
-    if (end < groups.length - 1) parts.push('...');
-    return parts.join(' ');
+  const projectLabel = (group) => {
+    if (group === 'All') return groupLabel(group);
+    const count = sessions.filter((s) => s.cwd === group).length;
+    const base = path.basename(group) || group;
+    return `${truncate(base, Math.max(10, projectWidth - 10))} (${count})`;
   };
 
   const sessionLabel = (session) => {
@@ -546,9 +512,41 @@ async function ui() {
     if (selected >= visible.length) selected = Math.max(0, visible.length - 1);
   };
 
+  const applyLayout = () => {
+    const width = screen.width || 80;
+    const height = screen.height || 24;
+    projectWidth = Math.min(42, Math.max(24, Math.floor(width * 0.28)));
+    const top = 3;
+    const bottom = 3;
+    const available = Math.max(10, height - top - bottom);
+    const sessionsHeight = Math.max(7, Math.floor(available * 0.45));
+
+    projectsList.width = projectWidth;
+    projectsList.top = top;
+    projectsList.bottom = bottom;
+
+    sessionsList.left = projectWidth;
+    sessionsList.top = top;
+    sessionsList.height = sessionsHeight;
+
+    detailBox.left = projectWidth;
+    detailBox.top = top + sessionsHeight;
+    detailBox.bottom = bottom;
+  };
+
+  const syncProjects = () => {
+    const items = groups.length ? groups.map(projectLabel) : ['No projects'];
+    syncingProjects = true;
+    projectsList.clearItems();
+    projectsList.setItems(items);
+    projectsList.select(groupIndex);
+    projectsList.scrollTo(groupIndex);
+    syncingProjects = false;
+  };
+
   const syncList = () => {
     const visible = currentSessions();
-    const listRows = Math.max(1, (screen.height || 24) - 11);
+    const listRows = Math.max(1, (sessionsList.height || Math.floor((screen.height || 24) * 0.4)) - 2);
     const items = visible.length ? visible.map(sessionLabel) : ['No sessions in this project.'];
     while (items.length < listRows) items.push('');
     syncingList = true;
@@ -563,12 +561,13 @@ async function ui() {
   };
 
   const render = () => {
+    applyLayout();
     const visible = currentSessions();
     header.setContent(` Codex Workbench\n ${visible.length}/${sessions.length} visible  ${groups[groupIndex] === 'All' ? 'All projects' : groups[groupIndex]}`);
-    groupsBar.setContent(groupsContent());
+    projectsList.setLabel(` Projects (${Math.max(0, groups.length - 1)}) `);
     detailBox.setLabel(' Details ');
     detailBox.setContent(detailContent(selectedSession()));
-    status.setContent(`${message || 'Ready'}\nEnter/r resume  tab focus  f fork  v view  n rename  o note  a archive  d delete  q quit`);
+    status.setContent(`${message || 'Ready'}\nTab focus  ←/→ panes  ↑/↓ select  Enter/r resume  f fork  v view  n rename  o note  a archive  d delete  q quit`);
     screen.render();
   };
 
@@ -587,14 +586,16 @@ async function ui() {
   const refreshAfterAction = (text, isError = false) => {
     setMessage(text, isError);
     reload();
+    syncProjects();
     syncList();
     render();
   };
 
-  const switchGroup = (offset) => {
+  const selectGroup = (index) => {
     if (!groups.length) return;
-    groupIndex = Math.max(0, Math.min(groups.length - 1, groupIndex + offset));
+    groupIndex = Math.max(0, Math.min(groups.length - 1, index));
     selected = 0;
+    syncProjects();
     syncList();
     render();
   };
@@ -626,7 +627,30 @@ async function ui() {
 
   reload();
   setMessage('Ready');
+  applyLayout();
+  syncProjects();
   syncList();
+
+  projectsList.on('select item', (_item, index) => {
+    if (syncingProjects) return;
+    selectGroup(index);
+  });
+
+  projectsList.key(['j', 'down'], () => {
+    if (promptOpen()) return;
+    selectGroup(groupIndex + 1);
+  });
+
+  projectsList.key(['k', 'up'], () => {
+    if (promptOpen()) return;
+    selectGroup(groupIndex - 1);
+  });
+
+  projectsList.key(['right', 'l', 'enter'], () => {
+    if (promptOpen()) return;
+    sessionsList.focus();
+    screen.render();
+  });
 
   sessionsList.on('select item', (_item, index) => {
     if (syncingList) return;
@@ -659,27 +683,47 @@ async function ui() {
 
   sessionsList.key(['left', 'h'], () => {
     if (promptOpen()) return;
-    switchGroup(-1);
+    projectsList.focus();
+    screen.render();
   });
 
   sessionsList.key(['right', 'l'], () => {
     if (promptOpen()) return;
-    switchGroup(1);
+    detailBox.focus();
+    screen.render();
   });
 
   detailBox.key(['left', 'h'], () => {
     if (promptOpen()) return;
-    switchGroup(-1);
+    sessionsList.focus();
+    screen.render();
   });
 
   detailBox.key(['right', 'l'], () => {
     if (promptOpen()) return;
-    switchGroup(1);
+    projectsList.focus();
+    screen.render();
+  });
+
+  screen.on('resize', () => {
+    applyLayout();
+    syncProjects();
+    syncList();
+    render();
   });
 
   screen.key(['tab'], () => {
     if (promptOpen()) return;
+    if (screen.focused === projectsList) sessionsList.focus();
+    else if (screen.focused === sessionsList) detailBox.focus();
+    else projectsList.focus();
+    screen.render();
+  });
+
+  screen.key(['S-tab'], () => {
+    if (promptOpen()) return;
     if (screen.focused === detailBox) sessionsList.focus();
+    else if (screen.focused === sessionsList) projectsList.focus();
     else detailBox.focus();
     screen.render();
   });
@@ -744,7 +788,7 @@ async function ui() {
     }
   }));
 
-  sessionsList.focus();
+  projectsList.focus();
   render();
 
   return new Promise(() => {});

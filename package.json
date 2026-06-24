@@ -32,12 +32,19 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --check src/cli.js && node --check src/codex-bin.js && node test/codex-bin.test.js && node test/smoke.js"
+    "test": "node --check src/cli.js && node --check src/codex-bin.js && node --check scripts/pty-codex.js && node --check scripts/tui-pty-codex.js && node --check scripts/blessed-xterm-codex.js && node test/codex-bin.test.js && node test/smoke.js",
+    "pty:codex": "node scripts/pty-codex.js",
+    "tui:codex": "node scripts/tui-pty-codex.js",
+    "xterm:codex": "node scripts/blessed-xterm-codex.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "blessed": "^0.1.81"
+  },
+  "devDependencies": {
+    "blessed-xterm": "^1.5.1",
+    "node-pty": "^1.2.0-beta.13"
   }
 }
