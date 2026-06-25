@@ -122,29 +122,7 @@ Only use `--file` when Codex itself cannot remove the session. It deletes the JS
 
 Run `cwb` with no arguments to open the TUI:
 
-```
-┌─ Codex Workbench ───────────────────────────────────────────────────┐
-│  12/57 visible  Local: ~/projects/api                              │
-├──────────────┬──────────────────────────────────────────────────────┤
-│ > Sources    │ > Sessions                                           │
-│              │                                                      │
-│ 0 All (57)   │ a1b2c3d4e5f6g  23t  2025-03-15 14:22  fix auth bug  │
-│ = host-a (5) │ c8d9e0f1a2b3c  12t  2025-03-14 09:15  refactor db   │
-│   api (3)    │ d4e5f6g7h8i9j   5t  2025-03-13 16:48  add tests      │
-│   web (2)    │ ...                                                  │
-│ = host-b (7) │                                                      │
-│   data (4)   ├──────────────────────────────────────────────────────┤
-│   infra (3)  │ > Details                                            │
-│              │                                                      │
-│              │ fix auth bug                                         │
-│              │ id:       a1b2c3d4e5f6g7...                          │
-│              │ source:   Local                                      │
-│              │ cwd:      ~/projects/api                             │
-│              │ ...                                                  │
-├──────────────┴──────────────────────────────────────────────────────┤
-│ Sessions: ↑/↓ select  Enter resume  r rename  n new  d delete  q quit│
-└─────────────────────────────────────────────────────────────────────┘
-```
+![Screenshot of codex-workbench interactive TUI showing local, staging, and production sessions](assets/screenshot.png)
 
 ### Keyboard shortcuts
 

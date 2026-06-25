@@ -13,3 +13,6 @@ npm-debug.log*
 
 # macOS
 .DS_Store
+
+# Screenshot mock data
+mock-data/
