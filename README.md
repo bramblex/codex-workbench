@@ -1,6 +1,6 @@
 # codex-workbench
 
-> Terminal workbench for browsing, organizing, and resuming [Codex](https://github.com/openai/codex) sessions — locally and across SSH remotes.
+> A keyboard-driven terminal UI for browsing, organizing, and resuming [Codex](https://github.com/openai/codex) sessions — locally and across SSH remotes.
 
 [![npm version](https://img.shields.io/npm/v/@bramblex/codex-workbench)](https://www.npmjs.com/package/@bramblex/codex-workbench)
 [![license](https://img.shields.io/npm/l/@bramblex/codex-workbench)](LICENSE)
@@ -8,25 +8,17 @@
 
 ---
 
-## What is it?
-
-codex-workbench gives you a fast, keyboard-driven terminal UI over your Codex sessions. It reads session JSONL files from the Codex sessions directory and lets you **inspect, rename, annotate, fork, archive, hide, and delete** sessions without digging through `~/.codex/sessions/` by hand.
-
-It also aggregates sessions from **remote machines over SSH** — so you can manage Codex sessions across all your servers from one terminal.
-
-Run it without arguments to open the interactive TUI, or use the CLI subcommands for scripting and automation.
+![Screenshot of codex-workbench interactive TUI showing local, staging, and production sessions](assets/screenshot.png)
 
 ---
 
-## Features
+## What is it?
 
-- **Interactive TUI** — three-pane layout: sources/projects → sessions → details
-- **Remote SSH sources** — browse and manage sessions on distant machines with zero remote dependencies beyond `codex-workbench` itself
-- **Session metadata** — assign custom names and notes, hide stale sessions without deleting them
-- **One-key actions** — resume, fork, archive, or delete sessions from the keyboard
-- **Directory picker** — navigate the filesystem to start new sessions in any project
-- **JSON output** — pipe `list --json` into `jq` or other tools
-- **Short aliases** — installed as both `codex-workbench` and `cwb`
+codex-workbench is an **interactive terminal UI** for your Codex sessions. Instead of digging through `~/.codex/sessions/` by hand, you get a fast, keyboard-driven interface to **browse, search, rename, annotate, fork, archive, and delete** sessions — all without leaving the terminal.
+
+It also connects to **remote machines over SSH**, so you can manage Codex sessions across all your servers from a single pane of glass.
+
+A handful of CLI subcommands are available for scripting, but the TUI is the product.
 
 ---
 
@@ -36,93 +28,22 @@ Run it without arguments to open the interactive TUI, or use the CLI subcommands
 npm install -g @bramblex/codex-workbench
 ```
 
-Make sure Codex is available in your shell `PATH`. Verify everything is wired up:
+Verify Codex is reachable, then open the workbench:
 
 ```bash
 codex-workbench doctor
-```
-
-Then open the workbench:
-
-```bash
-codex-workbench
-# or just:
 cwb
 ```
 
----
-
-## CLI commands
-
-### Browse sessions
-
-```bash
-codex-workbench list                          # human-readable, grouped by source + project
-codex-workbench list --json                   # machine-readable full output
-codex-workbench list --json --compact         # omit message history (faster for scripting)
-codex-workbench list --cwd ~/projects/foo     # filter to one working directory
-codex-workbench list --all                    # include archived and hidden sessions
-```
-
-### Inspect a session
-
-```bash
-codex-workbench show <session>
-```
-
-`<session>` can be a full session id, a unique prefix, a saved custom name, or a session filename.
-
-### Manage sessions
-
-```bash
-codex-workbench rename <session> "fix the auth bug"
-codex-workbench note <session> "investigated JWT expiry, seems to be clock skew"
-codex-workbench archive <session>
-codex-workbench unarchive <session>
-codex-workbench hide <session>         # remove from default list but keep on disk
-codex-workbench unhide <session>
-codex-workbench fork <session>
-codex-workbench delete <session> --force
-```
-
-### Start and resume
-
-```bash
-codex-workbench new --cwd ~/projects/foo "Summarize this repo"
-codex-workbench resume <session> "what was the conclusion about the rate limiter?"
-```
-
-When you run `new` or `resume`, Codex takes over the terminal. When it exits, codex-workbench returns.
-
-### Directories
-
-```bash
-codex-workbench dirs --cwd ~/projects
-codex-workbench dirs --json
-codex-workbench mkdir ~/projects my-new-feature
-```
-
-### Diagnostics
-
-```bash
-codex-workbench doctor
-```
-
-### Force-delete a broken session file
-
-```bash
-codex-workbench delete <session> --file
-```
-
-Only use `--file` when Codex itself cannot remove the session. It deletes the JSONL file directly without going through the Codex CLI.
+That's it. `cwb` with no arguments opens the TUI.
 
 ---
 
 ## Interactive TUI
 
-Run `cwb` with no arguments to open the TUI:
+The TUI has three panes: **sources & projects** on the left, **sessions** on the upper right, and **session details** below. Local sessions load instantly; remote SSH sources stream in asynchronously.
 
-![Screenshot of codex-workbench interactive TUI showing local, staging, and production sessions](assets/screenshot.png)
+When you resume or start a session, Codex takes over the terminal. When it exits, the workbench redraws.
 
 ### Keyboard shortcuts
 
@@ -135,7 +56,7 @@ Run `cwb` with no arguments to open the TUI:
 | `0` | Show all sources |
 | `1`–`9` | Jump to source |
 | `[` `]` | Previous / next source |
-| `n` | New session (picks directory from active project) |
+| `n` | New session (opens directory picker) |
 | `f` | Fork selected session |
 | `r` | Rename selected session |
 | `o` | Add or edit note |
@@ -145,8 +66,6 @@ Run `cwb` with no arguments to open the TUI:
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
 ### Directory picker
-
-When creating a new session, the directory picker opens:
 
 | Key | Action |
 |-----|--------|
@@ -161,11 +80,11 @@ When creating a new session, the directory picker opens:
 
 ## Remote SSH sources
 
-codex-workbench can show sessions from remote machines by running `cwb` over SSH.
+codex-workbench can show sessions from remote machines by running `cwb` over SSH. Remote sources appear alongside `Local` in the TUI and load asynchronously.
 
 ### Requirements
 
-The remote machine must have `codex-workbench` installed and the `cwb` command available in the **non-interactive SSH PATH** (not just your interactive shell). Test it:
+The remote must have `codex-workbench` installed and `cwb` available in the **non-interactive SSH PATH**. Test it:
 
 ```bash
 ssh user@host 'cwb list --json'
@@ -180,12 +99,12 @@ Create `~/.codex/codex-workbench.config.json`:
   "servers": [
     {
       "id": "devbox",
-      "label": "Dev box",
+      "label": "SSH · Dev Box",
       "target": "user@dev.example.com"
     },
     {
       "id": "gpu",
-      "label": "GPU server",
+      "label": "SSH · GPU Server",
       "target": "gpu-host",
       "command": "/usr/local/bin/cwb",
       "sshArgs": ["-p", "2222"]
@@ -197,12 +116,48 @@ Create `~/.codex/codex-workbench.config.json`:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `target` | Yes | SSH destination (`user@host` or hostname) |
+| `label` | No | Display name in the TUI |
 | `id` | No | Short identifier (defaults to sanitized target) |
-| `label` | No | Display name in the UI |
 | `command` | No | Path to `cwb` on the remote (default: `cwb`) |
 | `sshArgs` | No | Extra SSH flags, e.g. `["-p", "2222"]` |
 
-Remote sources appear alongside `Local` in the TUI and load asynchronously in the background. Most operations (rename, note, hide, new, resume, fork, archive, delete) are forwarded to the remote `cwb`.
+Operations like rename, note, hide, new, resume, fork, archive, and delete are forwarded to the remote `cwb` transparently.
+
+---
+
+## CLI commands
+
+The TUI is the primary interface, but every action is also available as a CLI subcommand for scripting and automation.
+
+```bash
+cwb list                           # human-readable, grouped by source + project
+cwb list --json --compact          # machine-readable, omits message history
+cwb list --cwd ~/projects/foo      # filter to one working directory
+cwb list --all                     # include archived and hidden sessions
+
+cwb show <session>                 # full session details
+cwb rename <session> "fix auth"    # give a session a memorable name
+cwb note <session> "clock skew"    # attach a persistent note
+cwb archive <session>              # archive without deleting
+cwb unarchive <session>
+cwb hide <session>                 # remove from default list, keep on disk
+cwb unhide <session>
+cwb fork <session>
+cwb delete <session> --force
+
+cwb new --cwd ~/projects/foo "Summarize this repo"
+cwb resume <session> "what was the conclusion about the rate limiter?"
+
+cwb dirs --cwd ~/projects
+cwb mkdir ~/projects my-new-feature
+
+cwb doctor                         # check Codex binary discovery
+cwb delete <session> --file        # force-delete broken session file
+```
+
+`<session>` can be a full session id, a unique prefix, a saved custom name, or a session filename.
+
+When you run `new` or `resume`, Codex takes over the terminal. When it exits, codex-workbench returns.
 
 ---
 
@@ -313,8 +268,6 @@ scripts/
 ```bash
 npm test
 ```
-
-This runs syntax checks on all source files and executes the test suite.
 
 ### Publishing
 
