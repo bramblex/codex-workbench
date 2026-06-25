@@ -629,12 +629,13 @@ async function runWorkbench() {
     updateFocusStyles();
   });
 
-  projectsList.key(['j', 'down'], () => {
+  // blessed handles up/down natively via keys:true; only bind j/k
+  projectsList.key(['j'], () => {
     if (promptOpen()) return;
     selectGroup(groupIndex + 1);
   });
 
-  projectsList.key(['k', 'up'], () => {
+  projectsList.key(['k'], () => {
     if (promptOpen()) return;
     selectGroup(groupIndex - 1);
   });
