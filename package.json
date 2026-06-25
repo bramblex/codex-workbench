@@ -1,6 +1,6 @@
 {
   "name": "@bramblex/codex-workbench",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Terminal workbench for browsing and managing local and SSH Codex sessions.",
   "license": "MIT",
   "repository": {
