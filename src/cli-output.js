@@ -1,7 +1,8 @@
 'use strict';
 
 const path = require('path');
-const { inspectCodexBin } = require('./codex-bin');
+const codex = require('./providers/codex');
+const { getAvailableProviders } = require('./providers');
 const { localTime, shortId, truncate } = require('./model/format');
 
 function usage() {
@@ -21,22 +22,23 @@ Usage:
   codex-workbench fork <session>
   codex-workbench archive <session>
   codex-workbench unarchive <session>
-  codex-workbench hide <session>
-  codex-workbench unhide <session>
   codex-workbench delete <session> [--force] [--file]
 
 Environment:
+  CWB_HOME              default: ~/.cwb
+  CWB_META              default: $CWB_HOME/metadata.json
+  CWB_CONFIG            default: $CWB_HOME/config.json
   CODEX_HOME            default: ~/.codex
   CODEX_SESSIONS_DIR    default: $CODEX_HOME/sessions
-  CODEX_WORKBENCH_META  default: $CODEX_HOME/codex-workbench.json
-  CODEX_WORKBENCH_CONFIG default: $CODEX_HOME/codex-workbench.config.json
+  CODEX_WORKBENCH_META  legacy override for CWB_META
+  CODEX_WORKBENCH_CONFIG legacy override for CWB_CONFIG
   CODEX_BIN             default: codex from shell PATH
 `);
 }
 
 function printList(sessions, opts = {}) {
   const filtered = sessions.filter((session) => {
-    if (!opts.all && (session.archived || session.hidden)) return false;
+    if (!opts.all && session.archived) return false;
     if (opts.cwd) return path.resolve(session.cwd) === path.resolve(opts.cwd);
     return true;
   });
@@ -55,8 +57,8 @@ function printList(sessions, opts = {}) {
   for (const group of groups.values()) {
     console.log(`\n${group.source ? `${group.source}: ` : ''}${group.cwd}`);
     for (const session of group.sessions) {
-      const label = session.name || truncate(session.first || session.last || '(no prompt)', 56);
-      const flags = [session.archived ? 'archived' : '', session.hidden ? 'hidden' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
+      const label = session.name || truncate(session.first || session.last || '(no prompt)', 52);
+      const flags = [session.backend || '', session.archived ? 'archived' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
       console.log(`  ${shortId(session.id)}  ${localTime(session.updatedAt)}  ${String(session.turns).padStart(2)} turns  ${flags ? `[${flags}] ` : ''}${label}`);
     }
   }
@@ -69,8 +71,9 @@ function compactSession(session) {
 }
 
 function printShow(session) {
-  console.log(`${session.name || '(unnamed)'} ${session.archived ? '[archived]' : ''}${session.hidden ? '[hidden]' : ''}`);
+  console.log(`${session.name || '(unnamed)'} ${session.archived ? '[archived]' : ''}`);
   console.log(`id:       ${session.id}`);
+  console.log(`backend:  ${session.backend || 'unknown'}`);
   if (session.sourceLabel) console.log(`source:   ${session.sourceLabel}`);
   console.log(`cwd:      ${session.cwd}`);
   console.log(`started:  ${localTime(session.startedAt)}`);
@@ -87,24 +90,32 @@ function printShow(session) {
 }
 
 function printDoctor() {
-  const result = inspectCodexBin();
+  const providers = getAvailableProviders();
+
   console.log('codex-workbench doctor');
-  console.log(`status: ${result.ok ? 'ok' : 'error'}`);
-  if (result.path) console.log(`codex:  ${result.path}`);
-  if (result.source) console.log(`source: ${result.source}`);
-  if (result.error) console.log(`error:  ${result.error}`);
-  console.log('\nChecks:');
-  for (const check of result.checks) {
-    const parts = [
-      check.source,
-      check.mode ? `mode=${check.mode}` : '',
-      check.shell ? `shell=${check.shell}` : '',
-      check.path ? `path=${check.path}` : '',
-      `executable=${check.executable ? 'yes' : 'no'}`,
-    ].filter(Boolean);
-    console.log(`  - ${parts.join(' ')}`);
+  console.log(`\nBackends detected: ${providers.length ? providers.map((p) => p.label).join(', ') : 'none'}`);
+
+  for (const provider of providers) {
+    console.log(`\n-- ${provider.label} --`);
+    const bin = provider.resolveBin();
+    if (bin) {
+      console.log(`  binary:   ${bin}`);
+    } else {
+      console.log(`  binary:   not found`);
+      try { provider.resolveBin(); } catch (err) { console.log(`  error:    ${err.message}`); }
+    }
+    try {
+      const files = provider.getSessionFiles();
+      console.log(`  sessions: ${files.length} file${files.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      console.log(`  sessions: error - ${err.message}`);
+    }
   }
-  if (!result.ok) process.exitCode = 1;
+
+  if (!providers.length) {
+    console.log('\nNo backends available. Install Codex CLI or pi coding agent.');
+    process.exitCode = 1;
+  }
 }
 
 module.exports = {

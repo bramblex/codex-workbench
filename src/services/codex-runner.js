@@ -1,69 +1,34 @@
 'use strict';
 
-const fs = require('fs');
-const { spawn, spawnSync } = require('child_process');
-const { HOME } = require('../config');
-const { resolveCodexBin } = require('../codex-bin');
+// ---------------------------------------------------------------------------
+// Backward-compatible re-exports – delegates to the provider layer.
+// New code should import directly from src/providers/ and use
+// providerForSession() to route by session.backend.
+// ---------------------------------------------------------------------------
 
-function usableCwd(dir) {
-  const candidates = [dir, process.cwd(), HOME];
-  for (const candidate of candidates) {
-    if (!candidate || candidate === '(unknown)') continue;
-    try {
-      if (fs.statSync(candidate).isDirectory()) return candidate;
-    } catch {
-      // Try the next fallback.
-    }
-  }
-  return HOME;
+const codex = require('../providers/codex');
+const { providerForSession } = require('../providers');
+
+// Re-export low-level helpers
+const shellQuote = codex.shellQuote;
+const commandShell = codex.commandShell;
+const usableCwd = codex.usableCwd;
+
+/**
+ * Run a CLI command against a session, routing to the correct provider backend.
+ */
+function runCodexCommand(command, session, args, inherit) {
+  const provider = providerForSession(session);
+  return provider.runCommand(command, session, args, inherit);
 }
 
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, "'\\''")}'`;
-}
-
-function commandShell() {
-  const shell = process.env.SHELL || '/bin/sh';
-  try {
-    fs.accessSync(shell, fs.constants.X_OK);
-    return shell;
-  } catch {
-    return '/bin/sh';
-  }
-}
-
-function runCodexArgv(argv, cwd, inherit = false) {
-  const shellCommand = `exec ${argv.map(shellQuote).join(' ')}`;
-  const shell = commandShell();
-  if (inherit) {
-    const child = spawn(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
-    child.on('error', (err) => {
-      console.error(`error: failed to start codex: ${err.message}`);
-      process.exit(1);
-    });
-    child.on('exit', (code, signal) => {
-      if (signal) process.kill(process.pid, signal);
-      process.exit(code || 0);
-    });
-    return undefined;
-  }
-  const result = spawnSync(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
-  if (result.error) throw new Error(`failed to start codex: ${result.error.message}`);
-  const status = typeof result.status === 'number' ? result.status : 1;
-  process.exitCode = status;
-  return status;
-}
-
-function runCodexCommand(command, session, args = [], inherit = false) {
-  const executable = resolveCodexBin();
-  const argv = [executable, command, session.id, ...args];
-  return runCodexArgv(argv, usableCwd(session.cwd), inherit);
-}
-
-function runNewCodexSession(cwd, args = [], inherit = false) {
-  const executable = resolveCodexBin();
-  const argv = [executable, ...args];
-  return runCodexArgv(argv, usableCwd(cwd), inherit);
+/**
+ * Start a new session, routing to the correct provider backend.
+ * Defaults to codex if no backend is specified.
+ */
+function runNewCodexSession(cwd, args, inherit, backend) {
+  const provider = backend ? require('../providers').getProvider(backend) : codex;
+  return provider.runNew(cwd, args, inherit);
 }
 
 module.exports = {

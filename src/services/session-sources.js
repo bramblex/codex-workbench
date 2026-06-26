@@ -6,6 +6,7 @@ const { listSessions, updateMetadata } = require('../model/session-store');
 const { listServers } = require('../model/workbench-config');
 const { runCodexCommand, runNewCodexSession, usableCwd } = require('./codex-runner');
 const { runRemoteCwb, runRemoteCwbJson, runRemoteCwbJsonAsync } = require('./ssh-runner');
+const { getAvailableProviders } = require('../providers');
 
 const LOCAL_SOURCE = {
   id: 'local',
@@ -46,7 +47,8 @@ function sortSessions(sessions) {
   return sessions;
 }
 
-function loadLocalWorkbenchSessions(sources = configuredSources()) {
+function loadLocalWorkbenchSessions(sources) {
+  if (!sources) sources = configuredSources();
   const sessions = listSessions().map((session) => attachSource(session, LOCAL_SOURCE));
   return { errors: [], sessions, sources };
 }
@@ -91,8 +93,25 @@ function resultStatus(result) {
   return typeof result.status === 'number' ? result.status : 1;
 }
 
-function runSourceSessionCommand(session, command, args = []) {
-  if (!session.sourceRemote) return runCodexCommand(command, session, args);
+function defaultBackend() {
+  const available = getAvailableProviders();
+  if (available.length === 0) return 'codex'; // fallback
+  // Prefer codex for backward compat; use the only one if just one is available
+  const codexAvail = available.find((p) => p.id === 'codex');
+  return codexAvail ? 'codex' : available[0].id;
+}
+
+function runSourceSessionCommand(session, command, args) {
+  if (!session.sourceRemote) {
+    const status = runCodexCommand(command, session, args);
+    // If the provider returns -1 (e.g. pi delete = file-based), fall through to file deletion
+    if (status === -1) {
+      const { deleteSessionFile } = require('../model/session-store');
+      deleteSessionFile(session);
+      return 0;
+    }
+    return status;
+  }
   const source = configuredSourceOrThrow(session.sourceId);
   const tty = command === 'resume' || command === 'fork';
   const result = runRemoteCwb(source, [command, session.id, ...args], { tty });
@@ -102,8 +121,8 @@ function runSourceSessionCommand(session, command, args = []) {
   return status;
 }
 
-function runSourceNewSession(source, cwd, args = []) {
-  if (!source || !source.remote) return runNewCodexSession(cwd, args);
+function runSourceNewSession(source, cwd, args) {
+  if (!source || !source.remote) return runNewCodexSession(cwd, args, true, defaultBackend());
   const result = runRemoteCwb(source, ['new', '--cwd', cwd, ...args], { tty: true });
   if (result.error) throw result.error;
   const status = resultStatus(result);
@@ -122,8 +141,6 @@ function updateSourceMetadata(session, patch) {
     result = runRemoteCwb(source, ['rename', session.id, patch.name || '']);
   } else if (Object.prototype.hasOwnProperty.call(patch, 'note')) {
     result = runRemoteCwb(source, ['note', session.id, patch.note || '']);
-  } else if (Object.prototype.hasOwnProperty.call(patch, 'hidden')) {
-    result = runRemoteCwb(source, [patch.hidden ? 'hide' : 'unhide', session.id]);
   }
   if (!result) return 0;
   if (result.error) throw result.error;
@@ -164,4 +181,5 @@ module.exports = {
   sourceById,
   sourceKey,
   updateSourceMetadata,
+  defaultBackend,
 };

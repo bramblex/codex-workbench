@@ -11,8 +11,10 @@ const cli = path.join(root, 'src', 'cli.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-workbench-smoke-'));
 const codexHome = path.join(tmp, '.codex');
 const sessionsDir = path.join(codexHome, 'sessions', '2026', '06');
+const piSessionsDir = path.join(tmp, '.pi', 'agent', 'sessions');
 const sessionFile = path.join(sessionsDir, 'rollout-2026-06-22T00-00-00-abcdef1234567890.jsonl');
 const deleteFileSession = path.join(sessionsDir, 'rollout-2026-06-22T00-00-01-fedcba0987654321.jsonl');
+const piSessionFile = path.join(piSessionsDir, '2026-06-22T00-00-02_pi123.jsonl');
 const fakeBinDir = path.join(tmp, 'bin');
 const fakeCodex = path.join(fakeBinDir, 'codex');
 const failingCodex = path.join(fakeBinDir, 'failing-codex');
@@ -20,6 +22,7 @@ const fakeCodexLog = path.join(tmp, 'codex-argv.log');
 const fakeShell = path.join(fakeBinDir, 'shell');
 
 fs.mkdirSync(sessionsDir, { recursive: true });
+fs.mkdirSync(piSessionsDir, { recursive: true });
 fs.mkdirSync(fakeBinDir, { recursive: true });
 fs.writeFileSync(fakeCodex, `#!/bin/sh
 printf '%s\\n' "$@" > "${fakeCodexLog}"
@@ -81,6 +84,22 @@ fs.writeFileSync(deleteFileSession, [
     },
   }),
 ].join('\n') + '\n');
+fs.writeFileSync(piSessionFile, [
+  JSON.stringify({
+    type: 'session',
+    version: 3,
+    id: 'pi123',
+    timestamp: '2026-06-22T00:00:02.000Z',
+    cwd: root,
+  }),
+  JSON.stringify({
+    type: 'message',
+    message: {
+      role: 'user',
+      content: [{ type: 'text', text: 'Pi prompt' }],
+    },
+  }),
+].join('\n') + '\n');
 
 function run(args, extraEnv = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
@@ -89,6 +108,7 @@ function run(args, extraEnv = {}) {
       ...process.env,
       CODEX_HOME: codexHome,
       CODEX_WORKBENCH_META: path.join(codexHome, 'meta.json'),
+      PI_CODING_AGENT_DIR: path.join(tmp, '.pi', 'agent'),
       ...extraEnv,
     },
     encoding: 'utf8',
@@ -98,7 +118,7 @@ function run(args, extraEnv = {}) {
 let result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
 const sessions = JSON.parse(result.stdout);
-assert.strictEqual(sessions.length, 2);
+assert.strictEqual(sessions.length, 3);
 const mainSession = sessions.find((session) => session.id === 'abcdef1234567890');
 assert.ok(mainSession);
 assert.strictEqual(mainSession.first, 'Fix the project');
@@ -139,21 +159,28 @@ dirsPayload = JSON.parse(result.stdout);
 assert.strictEqual(dirsPayload.path, path.join(dirsRoot, 'new-child'));
 assert.strictEqual(fs.statSync(dirsPayload.path).isDirectory(), true);
 
-result = run(['hide', 'abcdef']);
-assert.strictEqual(result.status, 0, result.stderr);
 result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
-assert.strictEqual(JSON.parse(result.stdout).length, 1);
+assert.strictEqual(JSON.parse(result.stdout).length, 3);
 result = run(['list', '--json', '--all']);
 assert.strictEqual(result.status, 0, result.stderr);
 let allSessions = JSON.parse(result.stdout);
-assert.strictEqual(allSessions.length, 2);
-assert.strictEqual(allSessions.find((session) => session.id === 'abcdef1234567890').hidden, true);
-result = run(['unhide', 'abcdef']);
+assert.strictEqual(allSessions.length, 3);
+
+result = run(['archive', 'pi123']);
 assert.strictEqual(result.status, 0, result.stderr);
 result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
-assert.strictEqual(JSON.parse(result.stdout).length, 2);
+assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === 'pi123'), false);
+result = run(['list', '--json', '--all']);
+assert.strictEqual(result.status, 0, result.stderr);
+allSessions = JSON.parse(result.stdout);
+assert.strictEqual(allSessions.find((session) => session.id === 'pi123').archived, true);
+result = run(['unarchive', 'pi123']);
+assert.strictEqual(result.status, 0, result.stderr);
+result = run(['list', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === 'pi123'), true);
 
 result = run(['delete', 'fedcba', '--file']);
 assert.strictEqual(result.status, 0, result.stderr);
@@ -206,11 +233,11 @@ result = run(['doctor'], {
   CODEX_BIN: '',
   PATH: '',
   SHELL: fakeShell,
+  PI_CODING_AGENT_DIR: path.join(tmp, '.pi', 'agent'),
 });
 assert.strictEqual(result.status, 0, result.stderr);
-assert.match(result.stdout, /status: ok/);
-assert.match(result.stdout, new RegExp(`codex:\\s+${fakeCodex.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-assert.match(result.stdout, /source: shell login PATH/);
+assert.match(result.stdout, /Backends detected/);
+assert.match(result.stdout, new RegExp(`binary:\\s+${fakeCodex.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
 
 fs.rmSync(fakeCodexLog, { force: true });
 result = run(['archive', 'abcdef'], {

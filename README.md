@@ -1,6 +1,6 @@
 # codex-workbench
 
-> A keyboard-driven terminal UI for browsing, organizing, and resuming [Codex](https://github.com/openai/codex) sessions — locally and across SSH remotes.
+> A keyboard-driven terminal UI for browsing, organizing, and resuming coding-agent sessions — locally and across SSH remotes.
 
 [![npm version](https://img.shields.io/npm/v/@bramblex/codex-workbench)](https://www.npmjs.com/package/@bramblex/codex-workbench)
 [![license](https://img.shields.io/npm/l/@bramblex/codex-workbench)](LICENSE)
@@ -14,9 +14,11 @@
 
 ## What is it?
 
-codex-workbench is an **interactive terminal UI** for your Codex sessions. Instead of digging through `~/.codex/sessions/` by hand, you get a fast, keyboard-driven interface to **browse, search, rename, annotate, fork, archive, and delete** sessions — all without leaving the terminal.
+codex-workbench is an **interactive terminal UI** for coding-agent sessions. Instead of digging through backend-specific session directories by hand, you get a fast, keyboard-driven interface to **browse, search, rename, annotate, fork, archive, and delete** sessions — all without leaving the terminal.
 
-It also connects to **remote machines over SSH**, so you can manage Codex sessions across all your servers from a single pane of glass.
+It also connects to **remote machines over SSH**, so you can manage sessions across all your servers from a single pane of glass.
+
+Built-in backends currently include [Codex](https://github.com/openai/codex) and pi. The backend layer is intentionally provider-based so additional agents can be added without changing the TUI workflow.
 
 A handful of CLI subcommands are available for scripting, but the TUI is the product.
 
@@ -28,7 +30,7 @@ A handful of CLI subcommands are available for scripting, but the TUI is the pro
 npm install -g @bramblex/codex-workbench
 ```
 
-Verify Codex is reachable, then open the workbench:
+Verify your backends are reachable, then open the workbench:
 
 ```bash
 codex-workbench doctor
@@ -43,13 +45,13 @@ That's it. `cwb` with no arguments opens the TUI.
 
 The TUI has three panes: **sources & projects** on the left, **sessions** on the upper right, and **session details** below. Local sessions load instantly; remote SSH sources stream in asynchronously.
 
-When you resume or start a session, Codex takes over the terminal. When it exits, the workbench redraws.
+When you resume or start a session, the selected backend takes over the terminal. When it exits, the workbench redraws.
 
 ### Keyboard shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Resume selected session in Codex |
+| `Enter` | Resume selected session in its backend |
 | `Tab` / `S-Tab` | Switch focus between panes |
 | `←` `→` / `h` `l` | Move between sources, sessions, and details |
 | `↑` `↓` / `j` `k` | Move selection up/down |
@@ -92,7 +94,7 @@ ssh user@host 'cwb list --json'
 
 ### Configuration
 
-Create `~/.codex/codex-workbench.config.json`:
+Create `~/.cwb/config.json`:
 
 ```json
 {
@@ -121,7 +123,22 @@ Create `~/.codex/codex-workbench.config.json`:
 | `command` | No | Path to `cwb` on the remote (default: `cwb`) |
 | `sshArgs` | No | Extra SSH flags, e.g. `["-p", "2222"]` |
 
-Operations like rename, note, hide, new, resume, fork, archive, and delete are forwarded to the remote `cwb` transparently.
+Operations like rename, note, new, resume, fork, archive, and delete are forwarded to the remote `cwb` transparently.
+
+Remote backends are supported as long as the remote `cwb` can read them.
+
+---
+
+## Backends
+
+codex-workbench auto-detects installed backends by checking their session directories.
+
+| Backend | Sessions | Binary override | Notes |
+|---------|----------|-----------------|-------|
+| `codex` | `$CODEX_SESSIONS_DIR` or `~/.codex/sessions` | `CODEX_BIN` | Uses the Codex CLI for new, resume, fork, archive, unarchive, and delete. |
+| `pi` | `$PI_CODING_AGENT_SESSION_DIR` or `$PI_CODING_AGENT_DIR/sessions` | `PI_BIN` | Uses the pi CLI for new, resume, and fork. Archive/unarchive use workbench metadata; delete removes the session file. |
+
+Session metadata such as custom names, notes, and archive state is stored in workbench's own metadata file, not inside backend session files.
 
 ---
 
@@ -133,15 +150,13 @@ The TUI is the primary interface, but every action is also available as a CLI su
 cwb list                           # human-readable, grouped by source + project
 cwb list --json --compact          # machine-readable, omits message history
 cwb list --cwd ~/projects/foo      # filter to one working directory
-cwb list --all                     # include archived and hidden sessions
+cwb list --all                     # include archived sessions
 
 cwb show <session>                 # full session details
 cwb rename <session> "fix auth"    # give a session a memorable name
 cwb note <session> "clock skew"    # attach a persistent note
 cwb archive <session>              # archive without deleting
 cwb unarchive <session>
-cwb hide <session>                 # remove from default list, keep on disk
-cwb unhide <session>
 cwb fork <session>
 cwb delete <session> --force
 
@@ -151,7 +166,7 @@ cwb resume <session> "what was the conclusion about the rate limiter?"
 cwb dirs --cwd ~/projects
 cwb mkdir ~/projects my-new-feature
 
-cwb doctor                         # check Codex binary discovery
+cwb doctor                         # check available backends and binaries
 cwb delete <session> --file        # force-delete broken session file
 ```
 
@@ -165,13 +180,23 @@ When you run `new` or `resume`, Codex takes over the terminal. When it exits, co
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `CWB_HOME` | `~/.cwb` | codex-workbench data directory |
+| `CWB_META` | `$CWB_HOME/metadata.json` | Workbench metadata (names, notes, archive state) |
+| `CWB_CONFIG` | `$CWB_HOME/config.json` | SSH remote sources config |
 | `CODEX_HOME` | `~/.codex` | Codex data directory |
 | `CODEX_SESSIONS_DIR` | `$CODEX_HOME/sessions` | Session JSONL files |
-| `CODEX_WORKBENCH_META` | `$CODEX_HOME/codex-workbench.json` | Workbench metadata (names, notes) |
-| `CODEX_WORKBENCH_CONFIG` | `$CODEX_HOME/codex-workbench.config.json` | SSH remote sources config |
+| `PI_CODING_AGENT_DIR` | `~/.pi/agent` | pi coding agent data directory |
+| `PI_CODING_AGENT_SESSION_DIR` | `$PI_CODING_AGENT_DIR/sessions` | pi session JSONL files |
+| `CODEX_WORKBENCH_META` | unset | Legacy override for `CWB_META` |
+| `CODEX_WORKBENCH_CONFIG` | unset | Legacy override for `CWB_CONFIG` |
 | `CODEX_BIN` | auto-detected | Force a specific Codex executable |
+| `PI_BIN` | auto-detected | Force a specific pi executable |
 
 By default, codex-workbench discovers the `codex` binary through your login shell's `PATH`. Set `CODEX_BIN` to override.
+
+`cwb doctor` reports every backend it can see.
+
+On first run, workbench moves legacy config files from `~/.codex/` into `~/.cwb/` if the new files do not exist yet.
 
 ---
 
@@ -185,9 +210,17 @@ Run `codex-workbench doctor` to see where codex-workbench is looking. Common fix
 - Set `CODEX_BIN=/path/to/codex` to point directly at the executable
 - Make sure your shell profile (`~/.zshrc`, `~/.bashrc`) adds Codex to `PATH`
 
-### No sessions appear
+### No Codex sessions appear
 
 Make sure you've run Codex at least once. Sessions are stored as `.jsonl` files under `$CODEX_SESSIONS_DIR`. Run `ls ~/.codex/sessions/` to verify.
+
+### No pi sessions appear
+
+Make sure you've run the pi coding agent at least once. Sessions are stored as `.jsonl` files under `$PI_CODING_AGENT_SESSION_DIR` or `$PI_CODING_AGENT_DIR/sessions`. Run `ls ~/.pi/agent/sessions/` to verify.
+
+### A backend is missing from doctor
+
+Backends appear only when their session directory exists. For a new backend integration, add a provider under `src/providers/` with session discovery, parsing, binary discovery, and command routing.
 
 ### Remote source shows an error
 
@@ -237,15 +270,20 @@ bin/codex-workbench          # executable entry point
 src/
   cli.js                     # CLI argument parsing and command dispatch
   cli-output.js              # terminal output formatters
-  codex-bin.js               # Codex binary discovery (PATH, shell, fallback)
+  codex-bin.js               # legacy Codex binary discovery wrapper
   config.js                  # environment-derived path constants
   model/
-    session-store.js         # session JSONL parsing and metadata persistence
+    metadata.js              # workbench-owned metadata persistence
+    session-store.js         # provider session aggregation and metadata merge
     format.js                # id/time/text formatting helpers
     directories.js           # filesystem directory listing and creation
     workbench-config.js      # SSH remote source config loader
+  providers/
+    codex.js                 # Codex provider
+    pi.js                    # pi provider
+    index.js                 # provider registry
   services/
-    codex-runner.js          # spawn Codex processes (new, resume, fork, etc.)
+    codex-runner.js          # backward-compatible provider runner wrapper
     session-sources.js       # aggregates local + remote session lists
     ssh-runner.js            # runs cwb commands over SSH (sync + async)
   ui/

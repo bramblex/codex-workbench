@@ -55,6 +55,7 @@ fs.chmodSync(path.join(binDir, 'ssh'), 0o755);
 process.env.CODEX_HOME = codexHome;
 process.env.CODEX_WORKBENCH_CONFIG = configPath;
 process.env.CODEX_WORKBENCH_META = path.join(codexHome, 'meta.json');
+process.env.PI_CODING_AGENT_DIR = path.join(tmp, '.pi', 'agent');
 process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 
 const {

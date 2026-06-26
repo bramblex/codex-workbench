@@ -223,12 +223,13 @@ async function runWorkbench() {
 
   const sessionLabel = (session) => {
     const flags = [
+      session.backend || '',
       session.name ? 'renamed' : '',
       session.note ? 'note' : '',
     ].filter(Boolean).join(',');
     const title = session.name || session.first || session.last || '(no prompt)';
     const flagText = flags ? `[${flags}]` : '';
-    return `${shortId(session.id)}  ${String(session.turns).padStart(2)}t  ${truncate(localTime(session.updatedAt), 18)}  ${flagText} ${truncate(title, 90)}`;
+    return `${shortId(session.id)}  ${String(session.turns).padStart(2)}t  ${truncate(localTime(session.updatedAt), 18)}  ${flagText} ${truncate(title, 88)}`;
   };
 
   const detailContent = (session) => {
@@ -238,6 +239,7 @@ async function runWorkbench() {
       title,
       '',
       `id:       ${session.id}`,
+      `backend:  ${session.backend || 'unknown'}`,
       `source:   ${session.sourceLabel || 'Local'}`,
       `cwd:      ${session.cwd}`,
       `started:  ${localTime(session.startedAt)}`,
@@ -256,7 +258,7 @@ async function runWorkbench() {
     status.style.fg = isError ? 'red' : 'white';
   };
 
-  const visibleSession = (session) => !session.archived && !session.hidden;
+  const visibleSession = (session) => !session.archived;
 
   const sortSessionList = (list) => {
     list.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -799,11 +801,8 @@ async function runWorkbench() {
     const status = runCodexAndReturn('delete', session, ['--force'], `Deleted ${shortId(session.id)}.`);
     if (status !== 0) {
       if (session.sourceRemote) {
-        const hideSession = await askConfirm(`Remote delete failed for ${shortId(session.id)}. Hide from remote workbench instead?`);
-        if (hideSession) {
-          updateSourceMetadata(session, { hidden: true });
-          refreshAfterAction(`Hidden ${shortId(session.id)}.`);
-        }
+        setMessage(`Remote delete failed for ${shortId(session.id)}.`, true);
+        render();
         return;
       }
       const removeFile = await askConfirm(`Codex could not delete ${shortId(session.id)}. Delete its session file?`);
@@ -811,11 +810,6 @@ async function runWorkbench() {
         deleteSessionFile(session);
         refreshAfterAction(`Deleted file for ${shortId(session.id)}.`);
         return;
-      }
-      const hideSession = await askConfirm(`Hide ${shortId(session.id)} from workbench instead?`);
-      if (hideSession) {
-        updateSourceMetadata(session, { hidden: true });
-        refreshAfterAction(`Hidden ${shortId(session.id)}.`);
       }
     }
   }));

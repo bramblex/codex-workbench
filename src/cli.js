@@ -18,6 +18,7 @@ const {
   runNewCodexSession,
   usableCwd,
 } = require('./services/codex-runner');
+const { defaultBackend } = require('./services/session-sources');
 const { runWorkbench } = require('./ui/workbench');
 const { createChildDirectory, listDirectories } = require('./model/directories');
 
@@ -68,13 +69,11 @@ async function main() {
   if (cmd === 'show') return printShow(resolveSession(flags._[0], sessions));
   if (cmd === 'rename') return updateMetadata(resolveSession(flags._[0], sessions), { name: flags._.slice(1).join(' ') });
   if (cmd === 'note') return updateMetadata(resolveSession(flags._[0], sessions), { note: flags._.slice(1).join(' ') });
-  if (cmd === 'new' || cmd === 'start') return runNewCodexSession(flags.cwd || process.cwd(), flags._, true);
+  if (cmd === 'new' || cmd === 'start') return runNewCodexSession(flags.cwd || process.cwd(), flags._, true, defaultBackend());
   if (cmd === 'resume') return runCodexCommand('resume', resolveSession(flags._[0], sessions), flags._.slice(1), true);
   if (cmd === 'fork') return runCodexCommand('fork', resolveSession(flags._[0], sessions), [], true);
   if (cmd === 'archive') return runCodexCommand('archive', resolveSession(flags._[0], sessions));
   if (cmd === 'unarchive') return runCodexCommand('unarchive', resolveSession(flags._[0], sessions));
-  if (cmd === 'hide') return updateMetadata(resolveSession(flags._[0], sessions), { hidden: true });
-  if (cmd === 'unhide') return updateMetadata(resolveSession(flags._[0], sessions), { hidden: false });
   if (cmd === 'delete') {
     const session = resolveSession(flags._[0], sessions);
     if (flags.file) return deleteSessionFile(session);
