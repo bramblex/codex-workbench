@@ -5,10 +5,11 @@
 // ---------------------------------------------------------------------------
 
 const codex = require('./codex');
+const claude = require('./claude');
 const opencode = require('./opencode');
 const pi = require('./pi');
 
-const ALL_PROVIDERS = [codex, pi, opencode];
+const ALL_PROVIDERS = [codex, pi, opencode, claude];
 const providerMap = new Map(ALL_PROVIDERS.map((p) => [p.id, p]));
 
 /**
@@ -59,6 +60,7 @@ module.exports = {
   getProvider,
   providerForSession,
   getAllSessionFiles,
+  claude,
   codex,
   opencode,
   pi,

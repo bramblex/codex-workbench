@@ -24,6 +24,35 @@ function findOnPath(command, pathValue) {
   return null;
 }
 
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function executableFromOutput(output) {
+  for (const line of String(output || '').split(/\r?\n/)) {
+    const candidate = line.trim();
+    if (candidate && path.isAbsolute(candidate) && isExecutable(candidate)) return candidate;
+  }
+  return null;
+}
+
+function runShellLookup(shell, shellArgs, command, env) {
+  const result = spawnSync(shell, [...shellArgs, `command -v ${shellQuote(command)}`], {
+    encoding: 'utf8',
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (result.error || result.status !== 0) return null;
+  return executableFromOutput(result.stdout);
+}
+
+function findWithShell(command, env) {
+  const shell = (env || process.env).SHELL || '/bin/sh';
+  if (!isExecutable(shell)) return null;
+  return runShellLookup(shell, ['-lc'], command, env) ||
+    runShellLookup(shell, ['-ic'], command, env);
+}
+
 function resolveOpenCodeBin() {
   if (process.env.OPENCODE_BIN) {
     if (isExecutable(process.env.OPENCODE_BIN)) return process.env.OPENCODE_BIN;
@@ -31,6 +60,8 @@ function resolveOpenCodeBin() {
   }
   const fromPath = findOnPath('opencode', process.env.PATH);
   if (fromPath) return fromPath;
+  const fromShell = findWithShell('opencode', process.env);
+  if (fromShell) return fromShell;
   throw new Error('Could not find the opencode executable. Set OPENCODE_BIN or add opencode to PATH.');
 }
 

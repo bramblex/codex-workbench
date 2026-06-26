@@ -10,23 +10,29 @@ const root = path.resolve(__dirname, '..');
 const cli = path.join(root, 'src', 'cli.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-workbench-smoke-'));
 const codexHome = path.join(tmp, '.codex');
+const claudeHome = path.join(tmp, '.claude');
 const sessionsDir = path.join(codexHome, 'sessions', '2026', '06');
+const claudeProjectsDir = path.join(claudeHome, 'projects', '-tmp-project');
 const piSessionsDir = path.join(tmp, '.pi', 'agent', 'sessions');
 const sessionFile = path.join(sessionsDir, 'rollout-2026-06-22T00-00-00-abcdef1234567890.jsonl');
 const deleteFileSession = path.join(sessionsDir, 'rollout-2026-06-22T00-00-01-fedcba0987654321.jsonl');
+const claudeSessionFile = path.join(claudeProjectsDir, '11111111-2222-3333-4444-555555555555.jsonl');
 const piSessionFile = path.join(piSessionsDir, '2026-06-22T00-00-02_pi123.jsonl');
 const fakeBinDir = path.join(tmp, 'bin');
 const fakeCodex = path.join(fakeBinDir, 'codex');
+const fakeClaude = path.join(fakeBinDir, 'claude');
 const fakePi = path.join(fakeBinDir, 'pi');
 const fakeOpenCode = path.join(fakeBinDir, 'opencode');
 const failingCodex = path.join(fakeBinDir, 'failing-codex');
 const fakeCodexLog = path.join(tmp, 'codex-argv.log');
+const fakeClaudeLog = path.join(tmp, 'claude-argv.log');
 const fakePiLog = path.join(tmp, 'pi-argv.log');
 const fakeOpenCodeLog = path.join(tmp, 'opencode-argv.log');
 const fakeOpenCodeDb = path.join(tmp, 'opencode.db');
 const fakeShell = path.join(fakeBinDir, 'shell');
 
 fs.mkdirSync(sessionsDir, { recursive: true });
+fs.mkdirSync(claudeProjectsDir, { recursive: true });
 fs.mkdirSync(piSessionsDir, { recursive: true });
 fs.mkdirSync(fakeBinDir, { recursive: true });
 fs.writeFileSync(fakeCodex, `#!/bin/sh
@@ -34,6 +40,11 @@ printf '%s\\n' "$@" > "${fakeCodexLog}"
 exit 0
 `);
 fs.chmodSync(fakeCodex, 0o755);
+fs.writeFileSync(fakeClaude, `#!/bin/sh
+printf '%s\\n' "$@" > "${fakeClaudeLog}"
+exit 0
+`);
+fs.chmodSync(fakeClaude, 0o755);
 fs.writeFileSync(fakePi, `#!/bin/sh
 printf '%s\\n' "$@" > "${fakePiLog}"
 exit 0
@@ -77,6 +88,8 @@ fs.chmodSync(failingCodex, 0o755);
 fs.writeFileSync(fakeShell, `#!/bin/sh
 case "$2" in
   "command -v 'codex'") printf '%s\\n' "${fakeCodex}" ;;
+  "command -v 'claude'") printf '%s\\n' "${fakeClaude}" ;;
+  "command -v 'opencode'") printf '%s\\n' "${fakeOpenCode}" ;;
   *) /bin/sh -c "$2" ;;
 esac
 `);
@@ -127,6 +140,48 @@ fs.writeFileSync(deleteFileSession, [
     },
   }),
 ].join('\n') + '\n');
+fs.writeFileSync(claudeSessionFile, [
+  JSON.stringify({
+    parentUuid: null,
+    type: 'user',
+    message: { role: 'user', content: 'Claude prompt' },
+    uuid: 'claude-user-1',
+    timestamp: '2026-06-22T00:00:03.000Z',
+    cwd: root,
+    sessionId: '11111111-2222-3333-4444-555555555555',
+    version: '0.0.0-test',
+  }),
+  JSON.stringify({
+    parentUuid: 'claude-user-1',
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      model: 'test-claude-model',
+      content: [{ type: 'text', text: 'Claude answer' }],
+    },
+    uuid: 'claude-assistant-1',
+    timestamp: '2026-06-22T00:00:04.000Z',
+    cwd: root,
+    sessionId: '11111111-2222-3333-4444-555555555555',
+    version: '0.0.0-test',
+  }),
+  JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: '<local-command-stdout>Bye!</local-command-stdout>' },
+    timestamp: '2026-06-22T00:00:05.000Z',
+    cwd: root,
+    sessionId: '11111111-2222-3333-4444-555555555555',
+    version: '0.0.0-test',
+  }),
+  JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: '<command-name>/exit</command-name>' },
+    timestamp: '2026-06-22T00:00:06.000Z',
+    cwd: root,
+    sessionId: '11111111-2222-3333-4444-555555555555',
+    version: '0.0.0-test',
+  }),
+].join('\n') + '\n');
 fs.writeFileSync(piSessionFile, [
   JSON.stringify({
     type: 'session',
@@ -150,6 +205,7 @@ function run(args, extraEnv = {}) {
     env: {
       ...process.env,
       CODEX_HOME: codexHome,
+      CLAUDE_HOME: claudeHome,
       CODEX_WORKBENCH_META: path.join(codexHome, 'meta.json'),
       PI_CODING_AGENT_DIR: path.join(tmp, '.pi', 'agent'),
       OPENCODE_DB: path.join(tmp, 'missing-opencode.db'),
@@ -162,11 +218,17 @@ function run(args, extraEnv = {}) {
 let result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
 const sessions = JSON.parse(result.stdout);
-assert.strictEqual(sessions.length, 3);
+assert.strictEqual(sessions.length, 4);
 const mainSession = sessions.find((session) => session.id === 'abcdef1234567890');
 assert.ok(mainSession);
 assert.strictEqual(mainSession.first, 'Fix the project');
 assert.ok(Array.isArray(mainSession.messages));
+const claudeSession = sessions.find((session) => session.id === '11111111-2222-3333-4444-555555555555');
+assert.ok(claudeSession);
+assert.strictEqual(claudeSession.backend, 'claude');
+assert.strictEqual(claudeSession.first, 'Claude prompt');
+assert.strictEqual(claudeSession.last, 'Claude prompt');
+assert.strictEqual(claudeSession.lastAssistant, 'Claude answer');
 
 result = run(['list', '--json', '--compact']);
 assert.strictEqual(result.status, 0, result.stderr);
@@ -180,11 +242,21 @@ result = run(['backends', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
 const backends = JSON.parse(result.stdout);
 assert.ok(backends.some((backend) => backend.id === 'codex'));
+assert.ok(backends.some((backend) => backend.id === 'claude'));
 assert.ok(backends.some((backend) => backend.id === 'pi'));
 
 result = run(['backends', '--json'], {
   OPENCODE_BIN: fakeOpenCode,
   OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.ok(JSON.parse(result.stdout).some((backend) => backend.id === 'opencode'));
+
+result = run(['backends', '--json'], {
+  OPENCODE_BIN: '',
+  OPENCODE_DB: fakeOpenCodeDb,
+  PATH: '',
+  SHELL: fakeShell,
 });
 assert.strictEqual(result.status, 0, result.stderr);
 assert.ok(JSON.parse(result.stdout).some((backend) => backend.id === 'opencode'));
@@ -218,11 +290,11 @@ assert.strictEqual(fs.statSync(dirsPayload.path).isDirectory(), true);
 
 result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
-assert.strictEqual(JSON.parse(result.stdout).length, 3);
+assert.strictEqual(JSON.parse(result.stdout).length, 4);
 result = run(['list', '--json', '--all']);
 assert.strictEqual(result.status, 0, result.stderr);
 let allSessions = JSON.parse(result.stdout);
-assert.strictEqual(allSessions.length, 3);
+assert.strictEqual(allSessions.length, 4);
 
 result = run(['archive', 'pi123']);
 assert.strictEqual(result.status, 0, result.stderr);
@@ -238,6 +310,17 @@ assert.strictEqual(result.status, 0, result.stderr);
 result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
 assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === 'pi123'), true);
+
+result = run(['archive', '11111111']);
+assert.strictEqual(result.status, 0, result.stderr);
+result = run(['list', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === '11111111-2222-3333-4444-555555555555'), false);
+result = run(['unarchive', '11111111']);
+assert.strictEqual(result.status, 0, result.stderr);
+result = run(['list', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === '11111111-2222-3333-4444-555555555555'), true);
 
 result = run(['delete', 'pi123', '--force']);
 assert.strictEqual(result.status, 0, result.stderr);
@@ -275,6 +358,15 @@ assert.strictEqual(result.status, 0, result.stderr);
 assert.deepStrictEqual(fs.readFileSync(fakePiLog, 'utf8').trim().split(/\r?\n/), [
   '-p',
   'hello pi',
+]);
+
+fs.rmSync(fakeClaudeLog, { force: true });
+result = run(['new', '--cwd', tmp, '--backend', 'claude', 'hello claude'], {
+  CLAUDE_BIN: fakeClaude,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeClaudeLog, 'utf8').trim().split(/\r?\n/), [
+  'hello claude',
 ]);
 
 fs.rmSync(fakeOpenCodeLog, { force: true });
@@ -330,6 +422,28 @@ assert.deepStrictEqual(fs.readFileSync(fakeOpenCodeLog, 'utf8').trim().split(/\r
   'continue here',
 ]);
 
+fs.rmSync(fakeClaudeLog, { force: true });
+result = run(['resume', '11111111', 'continue claude'], {
+  CLAUDE_BIN: fakeClaude,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeClaudeLog, 'utf8').trim().split(/\r?\n/), [
+  '--resume',
+  '11111111-2222-3333-4444-555555555555',
+  'continue claude',
+]);
+
+fs.rmSync(fakeClaudeLog, { force: true });
+result = run(['fork', '11111111'], {
+  CLAUDE_BIN: fakeClaude,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeClaudeLog, 'utf8').trim().split(/\r?\n/), [
+  '--resume',
+  '11111111-2222-3333-4444-555555555555',
+  '--fork-session',
+]);
+
 fs.rmSync(fakeOpenCodeLog, { force: true });
 result = run(['fork', 'opencode123'], {
   OPENCODE_BIN: fakeOpenCode,
@@ -370,6 +484,12 @@ assert.deepStrictEqual(fs.readFileSync(fakeOpenCodeLog, 'utf8').trim().split(/\r
   'delete',
   'opencode123',
 ]);
+
+result = run(['delete', '11111111', '--force'], {
+  CLAUDE_BIN: fakeClaude,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(fs.existsSync(claudeSessionFile), false);
 
 fs.rmSync(fakeCodexLog, { force: true });
 result = run(['archive', 'abcdef'], {

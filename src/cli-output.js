@@ -31,6 +31,8 @@ Environment:
   CWB_CONFIG            default: $CWB_HOME/config.json
   CODEX_HOME            default: ~/.codex
   CODEX_SESSIONS_DIR    default: $CODEX_HOME/sessions
+  CLAUDE_HOME           default: ~/.claude
+  CLAUDE_PROJECTS_DIR   default: $CLAUDE_HOME/projects
   PI_CODING_AGENT_DIR   default: ~/.pi/agent
   PI_CODING_AGENT_SESSION_DIR default: $PI_CODING_AGENT_DIR/sessions
   OPENCODE_DATA_DIR     default: ~/.local/share/opencode
@@ -38,6 +40,7 @@ Environment:
   CODEX_WORKBENCH_META  legacy override for CWB_META
   CODEX_WORKBENCH_CONFIG legacy override for CWB_CONFIG
   CODEX_BIN             default: codex from shell PATH
+  CLAUDE_BIN            default: claude from shell PATH
   PI_BIN                default: pi from shell PATH
   OPENCODE_BIN          default: opencode from shell PATH
 `);

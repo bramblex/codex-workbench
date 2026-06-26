@@ -18,7 +18,7 @@ codex-workbench is an **interactive terminal UI** for coding-agent sessions. Ins
 
 It also connects to **remote machines over SSH**, so you can manage sessions across all your servers from a single pane of glass.
 
-Built-in backends currently include [Codex](https://github.com/openai/codex), pi, and opencode. The backend layer is intentionally provider-based so additional agents can be added without changing the TUI workflow.
+Built-in backends currently include [Codex](https://github.com/openai/codex), Claude Code, pi, and opencode. The backend layer is intentionally provider-based so additional agents can be added without changing the TUI workflow.
 
 A handful of CLI subcommands are available for scripting, but the TUI is the product.
 
@@ -136,6 +136,7 @@ codex-workbench auto-detects installed backends by checking each backend's sessi
 | Backend | Sessions | Binary override | Notes |
 |---------|----------|-----------------|-------|
 | `codex` | `$CODEX_SESSIONS_DIR` or `~/.codex/sessions` | `CODEX_BIN` | Uses the Codex CLI for new, resume, fork, archive, unarchive, and delete. |
+| `claude` | `$CLAUDE_PROJECTS_DIR` or `~/.claude/projects` | `CLAUDE_BIN` | Uses the Claude Code CLI for new, resume, and fork. Archive/unarchive use workbench metadata; delete removes the session file. |
 | `pi` | `$PI_CODING_AGENT_SESSION_DIR` or `$PI_CODING_AGENT_DIR/sessions` | `PI_BIN` | Uses the pi CLI for new, resume, and fork. Archive/unarchive use workbench metadata; delete removes the session file. |
 | `opencode` | `$OPENCODE_DB`, `$OPENCODE_DATA_DIR/opencode.db`, or `~/.local/share/opencode/opencode.db` | `OPENCODE_BIN` | Uses the opencode CLI and database for list, new, resume, fork, archive, unarchive, and delete. |
 
@@ -165,6 +166,7 @@ cwb fork <session>
 cwb delete <session> --force
 
 cwb new --cwd ~/projects/foo --backend codex "Summarize this repo"
+cwb new --cwd ~/projects/foo --backend claude "Summarize this repo"
 cwb new --cwd ~/projects/foo --backend pi "Summarize this repo"
 cwb new --cwd ~/projects/foo --backend opencode "Summarize this repo"
 cwb resume <session> "what was the conclusion about the rate limiter?"
@@ -191,6 +193,8 @@ When you run `new` or `resume`, the selected backend takes over the terminal. Wh
 | `CWB_CONFIG` | `$CWB_HOME/config.json` | SSH remote sources config |
 | `CODEX_HOME` | `~/.codex` | Codex data directory |
 | `CODEX_SESSIONS_DIR` | `$CODEX_HOME/sessions` | Session JSONL files |
+| `CLAUDE_HOME` | `~/.claude` | Claude Code data directory |
+| `CLAUDE_PROJECTS_DIR` | `$CLAUDE_HOME/projects` | Claude Code project session JSONL files |
 | `PI_CODING_AGENT_DIR` | `~/.pi/agent` | pi coding agent data directory |
 | `PI_CODING_AGENT_SESSION_DIR` | `$PI_CODING_AGENT_DIR/sessions` | pi session JSONL files |
 | `OPENCODE_DATA_DIR` | `~/.local/share/opencode` | opencode data directory |
@@ -198,6 +202,7 @@ When you run `new` or `resume`, the selected backend takes over the terminal. Wh
 | `CODEX_WORKBENCH_META` | unset | Legacy override for `CWB_META` |
 | `CODEX_WORKBENCH_CONFIG` | unset | Legacy override for `CWB_CONFIG` |
 | `CODEX_BIN` | auto-detected | Force a specific Codex executable |
+| `CLAUDE_BIN` | auto-detected | Force a specific Claude Code executable |
 | `PI_BIN` | auto-detected | Force a specific pi executable |
 | `OPENCODE_BIN` | auto-detected | Force a specific opencode executable |
 
@@ -222,6 +227,10 @@ Run `codex-workbench doctor` to see where codex-workbench is looking. Common fix
 ### No Codex sessions appear
 
 Make sure you've run Codex at least once. Sessions are stored as `.jsonl` files under `$CODEX_SESSIONS_DIR`. Run `ls ~/.codex/sessions/` to verify.
+
+### No Claude Code sessions appear
+
+Make sure you've run Claude Code at least once. Sessions are stored as `.jsonl` files under `$CLAUDE_PROJECTS_DIR`. Run `find ~/.claude/projects -name '*.jsonl'` to verify.
 
 ### No pi sessions appear
 
@@ -293,6 +302,7 @@ src/
     workbench-config.js      # SSH remote source config loader
   providers/
     codex.js                 # Codex provider
+    claude.js                # Claude Code provider
     pi.js                    # pi provider
     opencode.js              # opencode provider
     index.js                 # provider registry

@@ -227,6 +227,7 @@ async function runWorkbench() {
   const styledListLabel = (color, text) => `{${color}-fg}{bold}${blessed.escape(text)}{/}`;
 
   const backendThemes = {
+    claude: 'yellow',
     codex: 'cyan',
     pi: 'magenta',
     opencode: 'green',
