@@ -249,6 +249,14 @@ function runSessionCommand(command, session, args, inherit) {
 module.exports = {
   id: 'codex',
   label: 'Codex',
+  capabilities: {
+    new: true,
+    resume: true,
+    fork: true,
+    archive: true,
+    unarchive: true,
+    delete: true,
+  },
   isAvailable,
   getSessionFiles,
   parseSession,

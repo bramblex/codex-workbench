@@ -105,6 +105,7 @@ function providerSummary(provider) {
   return {
     id: provider.id,
     label: provider.label || provider.id,
+    capabilities: provider.capabilities || {},
   };
 }
 
@@ -121,19 +122,15 @@ function listSourceBackends(source) {
     .map((backend) => ({
       id: String(backend.id),
       label: backend.label ? String(backend.label) : String(backend.id),
+      capabilities: backend.capabilities && typeof backend.capabilities === 'object'
+        ? backend.capabilities
+        : {},
     }));
 }
 
 function runSourceSessionCommand(session, command, args) {
   if (!session.sourceRemote) {
-    const status = runCodexCommand(command, session, args);
-    // If the provider returns -1 (e.g. pi delete = file-based), fall through to file deletion
-    if (status === -1) {
-      const { deleteSessionFile } = require('../model/session-store');
-      deleteSessionFile(session);
-      return 0;
-    }
-    return status;
+    return runCodexCommand(command, session, args);
   }
   const source = configuredSourceOrThrow(session.sourceId);
   const tty = command === 'resume' || command === 'fork';

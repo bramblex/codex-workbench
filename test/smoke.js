@@ -195,6 +195,10 @@ result = run(['list', '--json']);
 assert.strictEqual(result.status, 0, result.stderr);
 assert.strictEqual(JSON.parse(result.stdout).some((session) => session.id === 'pi123'), true);
 
+result = run(['delete', 'pi123', '--force']);
+assert.strictEqual(result.status, 0, result.stderr);
+assert.strictEqual(fs.existsSync(piSessionFile), false);
+
 result = run(['delete', 'fedcba', '--file']);
 assert.strictEqual(result.status, 0, result.stderr);
 assert.strictEqual(fs.existsSync(deleteFileSession), false);

@@ -140,6 +140,8 @@ codex-workbench auto-detects installed backends by checking their session direct
 
 Session metadata such as custom names, notes, and archive state is stored in workbench's own metadata file, not inside backend session files.
 
+Every provider owns the full workbench command surface it advertises: new, resume, fork, archive, unarchive, and delete. A provider can implement an operation through its native CLI, workbench metadata, or file operations, but callers should not need provider-specific fallback logic.
+
 ---
 
 ## CLI commands

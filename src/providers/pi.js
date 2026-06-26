@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const { HOME, PI_CODING_AGENT_DIR } = require('../config');
-const { updateMetadata } = require('../model/metadata');
+const { removeMetadata, updateMetadata } = require('../model/metadata');
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -272,9 +272,9 @@ function runSessionCommand(command, session, args, inherit) {
       return runArgv(argv, cwd, inherit);
     }
     case 'delete': {
-      // pi has no delete CLI – just remove the file
-      // A force flag is handled by session-sources calling deleteSessionFile
-      return -1; // signal that file-based deletion should be used
+      fs.unlinkSync(session.file);
+      removeMetadata(session);
+      return 0;
     }
     case 'archive':
     case 'unarchive': {
@@ -312,6 +312,14 @@ function resolveBin() {
 module.exports = {
   id: 'pi',
   label: 'pi',
+  capabilities: {
+    new: true,
+    resume: true,
+    fork: true,
+    archive: true,
+    unarchive: true,
+    delete: true,
+  },
   isAvailable,
   getSessionFiles,
   parseSession,

@@ -48,7 +48,7 @@ case "$last" in
     printf '%s\\n' '{"path":"/srv/app/new-dir"}'
     ;;
   *"'backends'"*"'--json'"*)
-    printf '%s\\n' '[{"id":"codex","label":"Codex"},{"id":"pi","label":"pi"}]'
+    printf '%s\\n' '[{"id":"codex","label":"Codex","capabilities":{"delete":true}},{"id":"pi","label":"pi","capabilities":{"delete":true}}]'
     ;;
 esac
 exit 0
@@ -92,8 +92,8 @@ assert.deepStrictEqual(dirs.entries, [{ name: 'src', path: '/srv/app/src' }]);
 
 assert.strictEqual(createSourceDirectory(source, '/srv/app', 'new-dir'), '/srv/app/new-dir');
 assert.deepStrictEqual(listSourceBackends(source), [
-  { id: 'codex', label: 'Codex' },
-  { id: 'pi', label: 'pi' },
+  { id: 'codex', label: 'Codex', capabilities: { delete: true } },
+  { id: 'pi', label: 'pi', capabilities: { delete: true } },
 ]);
 assert.strictEqual(updateSourceMetadata(session, { name: 'Named remote' }), 0);
 assert.strictEqual(runSourceSessionCommand(session, 'resume', ['hello']), 0);
