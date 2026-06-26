@@ -3,6 +3,7 @@
 const path = require('path');
 require('./blessed-compat');
 const blessed = require('blessed');
+const pkg = require('../../package.json');
 const { printList, printShow } = require('../cli-output');
 const { deleteSessionFile } = require('../model/session-store');
 const { localTime, shortId, truncate } = require('../model/format');
@@ -27,6 +28,7 @@ async function runWorkbench() {
     return printList(loadWorkbenchSessions().sessions);
   }
 
+  const appTitle = `Codex Workbench v${pkg.version}`;
   let sessions = [];
   let sources = [];
   let sourceErrors = [];
@@ -45,7 +47,7 @@ async function runWorkbench() {
   const screen = blessed.screen({
     smartCSR: true,
     fullUnicode: true,
-    title: 'Codex Workbench',
+    title: appTitle,
   });
 
   const header = blessed.box({
@@ -56,7 +58,7 @@ async function runWorkbench() {
     height: 3,
     padding: { left: 1, right: 1 },
     style: { fg: 'white', bg: 'blue' },
-    content: 'Codex Workbench',
+    content: appTitle,
   });
 
   const projectsList = blessed.list({
@@ -464,7 +466,7 @@ async function runWorkbench() {
   const render = () => {
     applyLayout();
     const visible = currentSessions();
-    header.setContent(` Codex Workbench\n ${visible.length}/${sessions.length} visible  ${groupDisplayName(currentGroup())}`);
+    header.setContent(` ${appTitle}\n ${visible.length}/${sessions.length} visible  ${groupDisplayName(currentGroup())}`);
     detailBox.setContent(detailContent(selectedSession()));
     updateFocusStyles();
     screen.render();
