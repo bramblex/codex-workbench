@@ -5,9 +5,10 @@
 // ---------------------------------------------------------------------------
 
 const codex = require('./codex');
+const opencode = require('./opencode');
 const pi = require('./pi');
 
-const ALL_PROVIDERS = [codex, pi];
+const ALL_PROVIDERS = [codex, pi, opencode];
 const providerMap = new Map(ALL_PROVIDERS.map((p) => [p.id, p]));
 
 /**
@@ -41,6 +42,10 @@ function providerForSession(session) {
 function getAllSessionFiles() {
   const files = [];
   for (const provider of getAvailableProviders()) {
+    if (provider.listSessions) {
+      for (const session of provider.listSessions()) files.push({ session, backend: provider.id });
+      continue;
+    }
     for (const file of provider.getSessionFiles()) {
       files.push({ file, backend: provider.id });
     }
@@ -55,5 +60,6 @@ module.exports = {
   providerForSession,
   getAllSessionFiles,
   codex,
+  opencode,
   pi,
 };

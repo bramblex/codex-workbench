@@ -18,10 +18,10 @@ function listSessions() {
   const fileEntries = getAllSessionFiles();
 
   const sessions = [];
-  for (const { file, backend } of fileEntries) {
+  for (const { file, backend, session: listedSession } of fileEntries) {
     try {
       const provider = getProvider(backend);
-      const session = provider.parseSession(file);
+      const session = listedSession || provider.parseSession(file);
       // Merge workbench metadata (name, note, archived)
       const custom = meta.sessions[session.id] || {};
       sessions.push({ ...session, ...custom });
@@ -45,7 +45,7 @@ function resolveSession(query, sessions) {
     return session.id === query ||
       session.id.startsWith(query) ||
       session.name === query ||
-      path.basename(session.file) === query;
+      (session.file && path.basename(session.file) === query);
   });
   if (matches.length === 1) return matches[0];
   if (matches.length === 0) throw new Error(`No session matched: ${query}`);
@@ -55,6 +55,7 @@ function resolveSession(query, sessions) {
 }
 
 function deleteSessionFile(session) {
+  if (!session.file) throw new Error(`Session does not have a standalone file: ${session.id}`);
   fs.unlinkSync(session.file);
   removeMetadata(session);
 }

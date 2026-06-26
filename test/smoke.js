@@ -18,9 +18,12 @@ const piSessionFile = path.join(piSessionsDir, '2026-06-22T00-00-02_pi123.jsonl'
 const fakeBinDir = path.join(tmp, 'bin');
 const fakeCodex = path.join(fakeBinDir, 'codex');
 const fakePi = path.join(fakeBinDir, 'pi');
+const fakeOpenCode = path.join(fakeBinDir, 'opencode');
 const failingCodex = path.join(fakeBinDir, 'failing-codex');
 const fakeCodexLog = path.join(tmp, 'codex-argv.log');
 const fakePiLog = path.join(tmp, 'pi-argv.log');
+const fakeOpenCodeLog = path.join(tmp, 'opencode-argv.log');
+const fakeOpenCodeDb = path.join(tmp, 'opencode.db');
 const fakeShell = path.join(fakeBinDir, 'shell');
 
 fs.mkdirSync(sessionsDir, { recursive: true });
@@ -36,6 +39,39 @@ printf '%s\\n' "$@" > "${fakePiLog}"
 exit 0
 `);
 fs.chmodSync(fakePi, 0o755);
+fs.writeFileSync(fakeOpenCode, `#!${process.execPath}
+const fs = require('fs');
+const argv = process.argv.slice(2);
+fs.writeFileSync(${JSON.stringify(fakeOpenCodeLog)}, argv.join('\\n') + '\\n');
+if (argv[0] === 'db') {
+  const sql = argv[1] || '';
+  if (/from session_message/i.test(sql)) {
+    process.stdout.write(JSON.stringify([
+      { type: 'user', data: JSON.stringify({ text: 'OpenCode prompt' }) },
+      { type: 'assistant', data: JSON.stringify({ text: 'OpenCode answer' }) },
+    ]));
+  } else if (/from session/i.test(sql)) {
+    process.stdout.write(JSON.stringify([
+      {
+        id: 'opencode123',
+        title: 'OpenCode title',
+        directory: ${JSON.stringify(root)},
+        version: '0.0.0-test',
+        model: 'test-model',
+        time_created: 1782086403000,
+        time_updated: 1782086404000,
+        time_archived: null,
+      },
+    ]));
+  } else {
+    process.stdout.write('[]');
+  }
+  process.exit(0);
+}
+process.exit(0);
+`);
+fs.chmodSync(fakeOpenCode, 0o755);
+fs.writeFileSync(fakeOpenCodeDb, '');
 fs.writeFileSync(failingCodex, '#!/bin/sh\nexit 7\n');
 fs.chmodSync(failingCodex, 0o755);
 fs.writeFileSync(fakeShell, `#!/bin/sh
@@ -116,6 +152,7 @@ function run(args, extraEnv = {}) {
       CODEX_HOME: codexHome,
       CODEX_WORKBENCH_META: path.join(codexHome, 'meta.json'),
       PI_CODING_AGENT_DIR: path.join(tmp, '.pi', 'agent'),
+      OPENCODE_DB: path.join(tmp, 'missing-opencode.db'),
       ...extraEnv,
     },
     encoding: 'utf8',
@@ -144,6 +181,13 @@ assert.strictEqual(result.status, 0, result.stderr);
 const backends = JSON.parse(result.stdout);
 assert.ok(backends.some((backend) => backend.id === 'codex'));
 assert.ok(backends.some((backend) => backend.id === 'pi'));
+
+result = run(['backends', '--json'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.ok(JSON.parse(result.stdout).some((backend) => backend.id === 'opencode'));
 
 result = run(['show', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);
@@ -233,6 +277,31 @@ assert.deepStrictEqual(fs.readFileSync(fakePiLog, 'utf8').trim().split(/\r?\n/),
   'hello pi',
 ]);
 
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['list', '--json'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+const openCodeSession = JSON.parse(result.stdout).find((session) => session.id === 'opencode123');
+assert.ok(openCodeSession);
+assert.strictEqual(openCodeSession.backend, 'opencode');
+assert.strictEqual(openCodeSession.cwd, root);
+assert.strictEqual(openCodeSession.first, 'OpenCode title');
+assert.strictEqual(openCodeSession.lastAssistant, 'OpenCode answer');
+
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['new', '--cwd', tmp, '--backend', 'opencode', 'hello opencode'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeOpenCodeLog, 'utf8').trim().split(/\r?\n/), [
+  tmp,
+  '--prompt',
+  'hello opencode',
+]);
+
 result = run(['new', '--backend', 'missing']);
 assert.strictEqual(result.status, 1);
 assert.match(result.stderr, /Unknown backend: missing/);
@@ -245,6 +314,61 @@ assert.strictEqual(result.status, 0, result.stderr);
 assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
   'fork',
   'abcdef1234567890',
+]);
+
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['resume', 'opencode123', 'continue here'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeOpenCodeLog, 'utf8').trim().split(/\r?\n/), [
+  root,
+  '--session',
+  'opencode123',
+  '--prompt',
+  'continue here',
+]);
+
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['fork', 'opencode123'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeOpenCodeLog, 'utf8').trim().split(/\r?\n/), [
+  root,
+  '--session',
+  'opencode123',
+  '--fork',
+]);
+
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['archive', 'opencode123'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.match(fs.readFileSync(fakeOpenCodeLog, 'utf8'), /update session set time_archived = \d+ where id = 'opencode123'/);
+
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['unarchive', 'opencode123'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.match(fs.readFileSync(fakeOpenCodeLog, 'utf8'), /update session set time_archived = null where id = 'opencode123'/);
+
+fs.rmSync(fakeOpenCodeLog, { force: true });
+result = run(['delete', 'opencode123', '--force'], {
+  OPENCODE_BIN: fakeOpenCode,
+  OPENCODE_DB: fakeOpenCodeDb,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakeOpenCodeLog, 'utf8').trim().split(/\r?\n/), [
+  'session',
+  'delete',
+  'opencode123',
 ]);
 
 fs.rmSync(fakeCodexLog, { force: true });

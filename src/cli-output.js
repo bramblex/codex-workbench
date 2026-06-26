@@ -31,9 +31,15 @@ Environment:
   CWB_CONFIG            default: $CWB_HOME/config.json
   CODEX_HOME            default: ~/.codex
   CODEX_SESSIONS_DIR    default: $CODEX_HOME/sessions
+  PI_CODING_AGENT_DIR   default: ~/.pi/agent
+  PI_CODING_AGENT_SESSION_DIR default: $PI_CODING_AGENT_DIR/sessions
+  OPENCODE_DATA_DIR     default: ~/.local/share/opencode
+  OPENCODE_DB           default: $OPENCODE_DATA_DIR/opencode.db
   CODEX_WORKBENCH_META  legacy override for CWB_META
   CODEX_WORKBENCH_CONFIG legacy override for CWB_CONFIG
   CODEX_BIN             default: codex from shell PATH
+  PI_BIN                default: pi from shell PATH
+  OPENCODE_BIN          default: opencode from shell PATH
 `);
 }
 
@@ -106,8 +112,13 @@ function printDoctor() {
       try { provider.resolveBin(); } catch (err) { console.log(`  error:    ${err.message}`); }
     }
     try {
-      const files = provider.getSessionFiles();
-      console.log(`  sessions: ${files.length} file${files.length === 1 ? '' : 's'}`);
+      if (provider.listSessions) {
+        const sessions = provider.listSessions();
+        console.log(`  sessions: ${sessions.length}`);
+      } else {
+        const files = provider.getSessionFiles();
+        console.log(`  sessions: ${files.length} file${files.length === 1 ? '' : 's'}`);
+      }
     } catch (err) {
       console.log(`  sessions: error - ${err.message}`);
     }
