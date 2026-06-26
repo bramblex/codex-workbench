@@ -21,6 +21,7 @@ const {
   updateSourceMetadata,
 } = require('../services/session-sources');
 const { usableCwd } = require('../services/codex-runner');
+const { checkForUpdate } = require('../services/update-checker');
 const { createDirectoryPicker } = require('./directory-picker');
 
 async function runWorkbench() {
@@ -42,6 +43,7 @@ async function runWorkbench() {
   let activePanel = 'projects';
   let remoteLoadId = 0;
   let remoteLoading = false;
+  let updateInfo = null;
   let closed = false;
 
   const screen = blessed.screen({
@@ -466,7 +468,8 @@ async function runWorkbench() {
   const render = () => {
     applyLayout();
     const visible = currentSessions();
-    header.setContent(` ${appTitle}\n ${visible.length}/${sessions.length} visible  ${groupDisplayName(currentGroup())}`);
+    const updateText = updateInfo ? `  Update available: v${updateInfo.latestVersion}` : '';
+    header.setContent(` ${appTitle}${updateText}\n ${visible.length}/${sessions.length} visible  ${groupDisplayName(currentGroup())}`);
     detailBox.setContent(detailContent(selectedSession()));
     updateFocusStyles();
     screen.render();
@@ -891,6 +894,11 @@ async function runWorkbench() {
   projectsList.focus();
   render();
   startRemoteReload(true);
+  checkForUpdate(pkg.version).then((nextUpdateInfo) => {
+    if (closed || !nextUpdateInfo) return;
+    updateInfo = nextUpdateInfo;
+    render();
+  });
 
   return new Promise(() => {});
 }
