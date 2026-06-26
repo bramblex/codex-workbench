@@ -94,6 +94,7 @@ async function runWorkbench() {
     mouse: true,
     keys: true,
     vi: false,
+    tags: true,
     scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'cyan' } },
     style: {
       border: { fg: 'cyan' },
@@ -225,6 +226,18 @@ async function runWorkbench() {
 
   const styledListLabel = (color, text) => `{${color}-fg}{bold}${blessed.escape(text)}{/}`;
 
+  const backendThemes = {
+    codex: 'cyan',
+    pi: 'magenta',
+    opencode: 'green',
+  };
+
+  const backendLabel = (backend, width = 0) => {
+    const text = backend || 'unknown';
+    const color = backendThemes[text] || 'yellow';
+    return `{${color}-fg}{bold}${blessed.escape(text.padEnd(width))}{/}`;
+  };
+
   const machineLabel = (source, count) => {
     const shortcut = sourceShortcut(source);
     const prefix = shortcut ? `${shortcut} ` : '';
@@ -248,14 +261,12 @@ async function runWorkbench() {
   };
 
   const sessionLabel = (session) => {
-    const flags = [
-      session.backend || '',
-      session.name ? 'renamed' : '',
-      session.note ? 'note' : '',
-    ].filter(Boolean).join(',');
     const title = session.name || session.first || session.last || '(no prompt)';
-    const flagText = flags ? `[${flags}]` : '';
-    return `${shortId(session.id)}  ${String(session.turns).padStart(2)}t  ${truncate(localTime(session.updatedAt), 18)}  ${flagText} ${truncate(title, 88)}`;
+    const width = Math.max(24, (screen.width || 80) - projectWidth - 8);
+    const backendWidth = Math.max(8, Math.min(12, String(session.backend || 'unknown').length + 2));
+    const time = truncate(localTime(session.updatedAt), 18).padEnd(18);
+    const detailWidth = Math.max(12, width - backendWidth - 22);
+    return `${backendLabel(session.backend, backendWidth)}  ${time}  ${blessed.escape(truncate(title, detailWidth))}`;
   };
 
   const detailContent = (session) => {
