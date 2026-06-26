@@ -151,6 +151,7 @@ cwb list                           # human-readable, grouped by source + project
 cwb list --json --compact          # machine-readable, omits message history
 cwb list --cwd ~/projects/foo      # filter to one working directory
 cwb list --all                     # include archived sessions
+cwb backends --json                # list detected local backends
 
 cwb show <session>                 # full session details
 cwb rename <session> "fix auth"    # give a session a memorable name
@@ -160,7 +161,8 @@ cwb unarchive <session>
 cwb fork <session>
 cwb delete <session> --force
 
-cwb new --cwd ~/projects/foo "Summarize this repo"
+cwb new --cwd ~/projects/foo --backend codex "Summarize this repo"
+cwb new --cwd ~/projects/foo --backend pi "Summarize this repo"
 cwb resume <session> "what was the conclusion about the rate limiter?"
 
 cwb dirs --cwd ~/projects
@@ -172,7 +174,7 @@ cwb delete <session> --file        # force-delete broken session file
 
 `<session>` can be a full session id, a unique prefix, a saved custom name, or a session filename.
 
-When you run `new` or `resume`, Codex takes over the terminal. When it exits, codex-workbench returns.
+When you run `new` or `resume`, the selected backend takes over the terminal. When it exits, codex-workbench returns. In the TUI, `n` scans the current source for available backends; local sources are scanned directly and remote sources are scanned with `cwb backends --json` over SSH.
 
 ---
 

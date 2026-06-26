@@ -17,8 +17,10 @@ const deleteFileSession = path.join(sessionsDir, 'rollout-2026-06-22T00-00-01-fe
 const piSessionFile = path.join(piSessionsDir, '2026-06-22T00-00-02_pi123.jsonl');
 const fakeBinDir = path.join(tmp, 'bin');
 const fakeCodex = path.join(fakeBinDir, 'codex');
+const fakePi = path.join(fakeBinDir, 'pi');
 const failingCodex = path.join(fakeBinDir, 'failing-codex');
 const fakeCodexLog = path.join(tmp, 'codex-argv.log');
+const fakePiLog = path.join(tmp, 'pi-argv.log');
 const fakeShell = path.join(fakeBinDir, 'shell');
 
 fs.mkdirSync(sessionsDir, { recursive: true });
@@ -29,6 +31,11 @@ printf '%s\\n' "$@" > "${fakeCodexLog}"
 exit 0
 `);
 fs.chmodSync(fakeCodex, 0o755);
+fs.writeFileSync(fakePi, `#!/bin/sh
+printf '%s\\n' "$@" > "${fakePiLog}"
+exit 0
+`);
+fs.chmodSync(fakePi, 0o755);
 fs.writeFileSync(failingCodex, '#!/bin/sh\nexit 7\n');
 fs.chmodSync(failingCodex, 0o755);
 fs.writeFileSync(fakeShell, `#!/bin/sh
@@ -132,6 +139,12 @@ assert.ok(compactSession);
 assert.strictEqual(compactSession.first, 'Fix the project');
 assert.strictEqual(Object.prototype.hasOwnProperty.call(compactSession, 'messages'), false);
 
+result = run(['backends', '--json']);
+assert.strictEqual(result.status, 0, result.stderr);
+const backends = JSON.parse(result.stdout);
+assert.ok(backends.some((backend) => backend.id === 'codex'));
+assert.ok(backends.some((backend) => backend.id === 'pi'));
+
 result = run(['show', 'abcdef']);
 assert.strictEqual(result.status, 0, result.stderr);
 assert.match(result.stdout, /id:\s+abcdef1234567890/);
@@ -206,6 +219,19 @@ assert.strictEqual(result.status, 0, result.stderr);
 assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
   'hello',
 ]);
+
+result = run(['new', '--cwd', tmp, '--backend', 'pi', 'hello pi'], {
+  PI_BIN: fakePi,
+});
+assert.strictEqual(result.status, 0, result.stderr);
+assert.deepStrictEqual(fs.readFileSync(fakePiLog, 'utf8').trim().split(/\r?\n/), [
+  '-p',
+  'hello pi',
+]);
+
+result = run(['new', '--backend', 'missing']);
+assert.strictEqual(result.status, 1);
+assert.match(result.stderr, /Unknown backend: missing/);
 
 fs.rmSync(fakeCodexLog, { force: true });
 result = run(['fork', 'abcdef'], {

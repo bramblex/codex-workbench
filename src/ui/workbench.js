@@ -10,6 +10,7 @@ const {
   LOCAL_SOURCE,
   createSourceDirectory,
   listSourceDirectories,
+  listSourceBackends,
   loadLocalWorkbenchSessions,
   loadRemoteSourceSessions,
   loadWorkbenchSessions,
@@ -148,6 +149,27 @@ async function runWorkbench() {
     padding: { left: 1, right: 1 },
     style: { border: { fg: 'red' }, fg: 'white', bg: 'black' },
   });
+
+  const backendPicker = blessed.list({
+    parent: screen,
+    label: ' Backend ',
+    top: 'center',
+    left: 'center',
+    width: 42,
+    height: 8,
+    border: 'line',
+    hidden: true,
+    mouse: true,
+    keys: true,
+    vi: false,
+    style: {
+      border: { fg: 'yellow' },
+      selected: { fg: 'black', bg: 'yellow', bold: true },
+      item: { fg: 'white' },
+    },
+  });
+
+  let backendPickerState = null;
 
   const sessionsForSource = (sourceId) => sessions.filter((session) => session.sourceId === sourceId);
 
@@ -465,6 +487,31 @@ async function runWorkbench() {
     question.ask(label, (err, answer) => resolve(!err && Boolean(answer)));
   });
 
+  const askBackend = (source) => new Promise((resolve) => {
+    let backends = [];
+    try {
+      backends = listSourceBackends(source);
+    } catch (err) {
+      setMessage(`error: ${err.message}`, true);
+      render();
+      resolve(null);
+      return;
+    }
+    if (backends.length <= 1) {
+      resolve(backends[0] ? backends[0].id : null);
+      return;
+    }
+
+    backendPickerState = { backends, resolve };
+    backendPicker.clearItems();
+    backendPicker.setItems(backends.map((backend) => `${backend.id}  ${backend.label || backend.id}`));
+    backendPicker.select(0);
+    backendPicker.show();
+    backendPicker.setFront();
+    backendPicker.focus();
+    screen.render();
+  });
+
   const directoryPicker = createDirectoryPicker({
     askInput,
     focusOnClose: () => focusPanel(projectsList, 'projects'),
@@ -472,7 +519,16 @@ async function runWorkbench() {
     truncate,
   });
 
-  const promptOpen = () => prompt.visible || question.visible || directoryPicker.isOpen();
+  const closeBackendPicker = (backend = null) => {
+    if (!backendPickerState) return;
+    const { resolve } = backendPickerState;
+    backendPickerState = null;
+    backendPicker.hide();
+    focusPanel(sessionsList, 'sessions');
+    resolve(backend);
+  };
+
+  const promptOpen = () => prompt.visible || question.visible || directoryPicker.isOpen() || Boolean(backendPickerState);
 
   const leaveScreen = () => {
     closed = true;
@@ -575,17 +631,23 @@ async function runWorkbench() {
     createDirectory: (parent, name) => createSourceDirectory(source, parent, name),
   });
 
-  const runNewCodexAndReturn = (cwd, args = []) => {
+  const runNewCodexAndReturn = async (cwd, args = []) => {
     const source = currentSource();
     const resolvedCwd = source.remote ? cwd : usableCwd(cwd);
+    const backend = await askBackend(source);
+    if (!backend) {
+      setMessage('New session cancelled.');
+      render();
+      return null;
+    }
     screen.leave();
     let status = 0;
     try {
-      status = runSourceNewSession(source, resolvedCwd, args);
+      status = runSourceNewSession(source, resolvedCwd, args, backend);
     } finally {
       screen.enter();
     }
-    const label = source.remote ? `${source.label}: ${resolvedCwd}` : resolvedCwd;
+    const label = source.remote ? `${source.label}: ${resolvedCwd}` : `${resolvedCwd} (${backend})`;
     if (status === 0) refreshAfterAction(`New session finished in ${label}.`, false, resolvedCwd, source.id);
     else refreshAfterAction(`new session exited with code ${status}.`, true, resolvedCwd, source.id);
     return status;
@@ -697,6 +759,16 @@ async function runWorkbench() {
     focusPanel(projectsList, 'projects');
   });
 
+  backendPicker.key(['enter'], () => {
+    if (!backendPickerState) return;
+    const backend = backendPickerState.backends[backendPicker.selected];
+    closeBackendPicker(backend ? backend.id : null);
+  });
+
+  backendPicker.key(['escape', 'q'], () => {
+    closeBackendPicker(null);
+  });
+
   screen.on('resize', () => {
     applyLayout();
     if (directoryPicker.isOpen()) directoryPicker.applyLayout();
@@ -768,10 +840,10 @@ async function runWorkbench() {
         setMessage('New project cancelled.');
         return render();
       }
-      runNewCodexAndReturn(dir);
+      await runNewCodexAndReturn(dir);
       return;
     }
-    runNewCodexAndReturn(currentProjectCwd());
+    await runNewCodexAndReturn(currentProjectCwd());
   });
 
   screen.key(['r'], () => runAction(async (session) => {

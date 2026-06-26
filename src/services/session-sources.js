@@ -101,6 +101,29 @@ function defaultBackend() {
   return codexAvail ? 'codex' : available[0].id;
 }
 
+function providerSummary(provider) {
+  return {
+    id: provider.id,
+    label: provider.label || provider.id,
+  };
+}
+
+function listLocalBackends() {
+  return getAvailableProviders().map(providerSummary);
+}
+
+function listSourceBackends(source) {
+  if (!source || !source.remote) return listLocalBackends();
+  const payload = runRemoteCwbJson(source, ['backends', '--json']);
+  if (!Array.isArray(payload)) throw new Error('remote backends did not return an array');
+  return payload
+    .filter((backend) => backend && backend.id)
+    .map((backend) => ({
+      id: String(backend.id),
+      label: backend.label ? String(backend.label) : String(backend.id),
+    }));
+}
+
 function runSourceSessionCommand(session, command, args) {
   if (!session.sourceRemote) {
     const status = runCodexCommand(command, session, args);
@@ -121,9 +144,10 @@ function runSourceSessionCommand(session, command, args) {
   return status;
 }
 
-function runSourceNewSession(source, cwd, args) {
-  if (!source || !source.remote) return runNewCodexSession(cwd, args, true, defaultBackend());
-  const result = runRemoteCwb(source, ['new', '--cwd', cwd, ...args], { tty: true });
+function runSourceNewSession(source, cwd, args, backend) {
+  if (!source || !source.remote) return runNewCodexSession(cwd, args, true, backend || defaultBackend());
+  const backendArgs = backend ? ['--backend', backend] : [];
+  const result = runRemoteCwb(source, ['new', '--cwd', cwd, ...backendArgs, ...args], { tty: true });
   if (result.error) throw result.error;
   const status = resultStatus(result);
   process.exitCode = status;
@@ -173,6 +197,8 @@ module.exports = {
   configuredSources,
   createSourceDirectory,
   listSourceDirectories,
+  listLocalBackends,
+  listSourceBackends,
   loadLocalWorkbenchSessions,
   loadRemoteSourceSessions,
   loadWorkbenchSessions,

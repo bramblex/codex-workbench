@@ -47,6 +47,9 @@ case "$last" in
   *"'mkdir'"*"'--json'"*)
     printf '%s\\n' '{"path":"/srv/app/new-dir"}'
     ;;
+  *"'backends'"*"'--json'"*)
+    printf '%s\\n' '[{"id":"codex","label":"Codex"},{"id":"pi","label":"pi"}]'
+    ;;
 esac
 exit 0
 `);
@@ -61,6 +64,7 @@ process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
 const {
   createSourceDirectory,
   listSourceDirectories,
+  listSourceBackends,
   loadRemoteSourceSessions,
   loadWorkbenchSessions,
   runSourceNewSession,
@@ -87,17 +91,22 @@ assert.strictEqual(dirs.cwd, '/srv/app');
 assert.deepStrictEqual(dirs.entries, [{ name: 'src', path: '/srv/app/src' }]);
 
 assert.strictEqual(createSourceDirectory(source, '/srv/app', 'new-dir'), '/srv/app/new-dir');
+assert.deepStrictEqual(listSourceBackends(source), [
+  { id: 'codex', label: 'Codex' },
+  { id: 'pi', label: 'pi' },
+]);
 assert.strictEqual(updateSourceMetadata(session, { name: 'Named remote' }), 0);
 assert.strictEqual(runSourceSessionCommand(session, 'resume', ['hello']), 0);
-assert.strictEqual(runSourceNewSession(source, '/srv/app', ['start here']), 0);
+assert.strictEqual(runSourceNewSession(source, '/srv/app', ['start here'], 'pi'), 0);
 
 const log = fs.readFileSync(sshLog, 'utf8');
 assert.match(log, /\tserver-a\t'cwb' 'list' '--json' '--compact'/);
 assert.match(log, /\tserver-a\t'cwb' 'dirs' '--cwd' '\/srv\/app' '--json'/);
 assert.match(log, /\tserver-a\t'cwb' 'mkdir' '--cwd' '\/srv\/app' '--json' 'new-dir'/);
+assert.match(log, /\tserver-a\t'cwb' 'backends' '--json'/);
 assert.match(log, /\tserver-a\t'cwb' 'rename' 'remote-123' 'Named remote'/);
 assert.match(log, /\t-t\tserver-a\t'cwb' 'resume' 'remote-123' 'hello'/);
-assert.match(log, /\t-t\tserver-a\t'cwb' 'new' '--cwd' '\/srv\/app' 'start here'/);
+assert.match(log, /\t-t\tserver-a\t'cwb' 'new' '--cwd' '\/srv\/app' '--backend' 'pi' 'start here'/);
 
 loadRemoteSourceSessions(source)
   .then((remoteSessions) => {

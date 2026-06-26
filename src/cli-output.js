@@ -11,11 +11,12 @@ function usage() {
 Usage:
   codex-workbench [ui]
   codex-workbench doctor
+  codex-workbench backends [--json]
   codex-workbench list [--json] [--compact] [--cwd <dir>] [--all]
   codex-workbench show <session>
   codex-workbench rename <session> <name>
   codex-workbench note <session> <note>
-  codex-workbench new [--cwd <dir>] [prompt...]
+  codex-workbench new [--cwd <dir>] [--backend <backend>] [prompt...]
   codex-workbench dirs [--cwd <dir>] [--json]
   codex-workbench mkdir [--cwd <dir>] <name> [--json]
   codex-workbench resume <session> [prompt...]
