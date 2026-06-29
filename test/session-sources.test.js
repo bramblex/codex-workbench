@@ -11,6 +11,7 @@ const codexHome = path.join(tmp, '.codex');
 const binDir = path.join(tmp, 'bin');
 const configPath = path.join(codexHome, 'codex-workbench.config.json');
 const sshLog = path.join(tmp, 'ssh.log');
+const codexLog = path.join(tmp, 'codex.log');
 
 fs.mkdirSync(codexHome, { recursive: true });
 fs.mkdirSync(binDir, { recursive: true });
@@ -54,12 +55,18 @@ esac
 exit 0
 `);
 fs.chmodSync(path.join(binDir, 'ssh'), 0o755);
+fs.writeFileSync(path.join(binDir, 'codex'), `#!/bin/sh
+printf '%s\\n' "$@" > '${codexLog}'
+exit 0
+`);
+fs.chmodSync(path.join(binDir, 'codex'), 0o755);
 
 process.env.CODEX_HOME = codexHome;
 process.env.CODEX_WORKBENCH_CONFIG = configPath;
 process.env.CODEX_WORKBENCH_META = path.join(codexHome, 'meta.json');
 process.env.PI_CODING_AGENT_DIR = path.join(tmp, '.pi', 'agent');
 process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH || ''}`;
+process.env.SHELL = '/bin/sh';
 
 const {
   createSourceDirectory,
@@ -98,6 +105,8 @@ assert.deepStrictEqual(listSourceBackends(source), [
 assert.strictEqual(updateSourceMetadata(session, { name: 'Named remote' }), 0);
 assert.strictEqual(runSourceSessionCommand(session, 'resume', ['hello']), 0);
 assert.strictEqual(runSourceNewSession(source, '/srv/app', ['start here'], 'pi'), 0);
+assert.strictEqual(runSourceNewSession(null, tmp, ['local start'], 'codex'), 0);
+assert.deepStrictEqual(fs.readFileSync(codexLog, 'utf8').trim().split(/\r?\n/), ['local start']);
 
 const log = fs.readFileSync(sshLog, 'utf8');
 assert.match(log, /\tserver-a\t'cwb' 'list' '--json' '--compact'/);

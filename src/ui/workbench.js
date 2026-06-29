@@ -721,16 +721,16 @@ async function runWorkbench() {
   const currentProjectCwd = () => {
     const group = currentGroup();
     if (group.kind === 'project') return group.cwd;
+    if (group.kind === 'source' && group.source.remote) return '.';
+    if (group.kind === 'source') return process.cwd();
     const session = selectedSession();
     if (session && session.cwd && session.cwd !== '(unknown)') return session.cwd;
-    if (group.kind === 'source' && group.source.remote) return '.';
     return process.cwd();
   };
 
   const currentSource = () => {
     const group = currentGroup();
     if (group.kind === 'source' || group.kind === 'project') return group.source;
-    if (activePanel === 'projects') return LOCAL_SOURCE;
     const session = selectedSession();
     return session ? sourceById(sources, session.sourceId) : LOCAL_SOURCE;
   };

@@ -142,7 +142,7 @@ function runSourceSessionCommand(session, command, args) {
 }
 
 function runSourceNewSession(source, cwd, args, backend) {
-  if (!source || !source.remote) return runNewCodexSession(cwd, args, true, backend || defaultBackend());
+  if (!source || !source.remote) return runNewCodexSession(cwd, args, false, backend || defaultBackend());
   const backendArgs = backend ? ['--backend', backend] : [];
   const result = runRemoteCwb(source, ['new', '--cwd', cwd, ...backendArgs, ...args], { tty: true });
   if (result.error) throw result.error;
