@@ -24,6 +24,40 @@ const { usableCwd } = require('../services/codex-runner');
 const { checkForUpdate } = require('../services/update-checker');
 const { createDirectoryPicker } = require('./directory-picker');
 
+const color = (hex) => blessed.colors.match(hex);
+
+const THEME = {
+  bg: color('#101216'),
+  surface: color('#151a21'),
+  surfaceRaised: color('#1f2630'),
+  surfaceMuted: color('#343b46'),
+  text: color('#e5e7eb'),
+  textMuted: color('#8b95a1'),
+  textInverse: color('#0b0f14'),
+  borderIdle: color('#3f4652'),
+  accent: color('#38bdf8'),
+  accentAlt: color('#2563eb'),
+  project: color('#22c55e'),
+  detail: color('#f59e0b'),
+  warning: color('#facc15'),
+  danger: color('#f87171'),
+  success: color('#34d399'),
+  tag: {
+    accent: 'cyan',
+    detail: 'yellow',
+    muted: 'gray',
+    text: 'white',
+    warning: 'yellow',
+  },
+  backend: {
+    claude: 'yellow',
+    codex: 'cyan',
+    opencode: 'green',
+    pi: 'magenta',
+    unknown: 'blue',
+  },
+};
+
 async function runWorkbench() {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return printList(loadWorkbenchSessions().sessions);
@@ -45,11 +79,21 @@ async function runWorkbench() {
   let remoteLoading = false;
   let updateInfo = null;
   let closed = false;
+  let searchQuery = '';
 
   const screen = blessed.screen({
     smartCSR: true,
     fullUnicode: true,
     title: appTitle,
+  });
+
+  blessed.box({
+    parent: screen,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    style: { bg: THEME.bg },
   });
 
   const header = blessed.box({
@@ -59,7 +103,7 @@ async function runWorkbench() {
     right: 0,
     height: 3,
     padding: { left: 1, right: 1 },
-    style: { fg: 'white', bg: 'blue' },
+    style: { fg: THEME.text, bg: THEME.accentAlt },
     content: appTitle,
   });
 
@@ -75,11 +119,13 @@ async function runWorkbench() {
     keys: true,
     vi: false,
     tags: true,
-    scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'green' } },
+    scrollbar: { ch: ' ', track: { bg: THEME.surface }, style: { bg: THEME.project } },
     style: {
-      border: { fg: 'green' },
-      selected: { fg: 'black', bg: 'green', bold: true },
-      item: { fg: 'white' },
+      bg: THEME.bg,
+      border: { fg: THEME.project, bg: THEME.bg },
+      label: { fg: THEME.project, bg: THEME.bg },
+      selected: { fg: THEME.textInverse, bg: THEME.project, bold: true },
+      item: { fg: THEME.text, bg: THEME.bg },
     },
   });
 
@@ -95,11 +141,13 @@ async function runWorkbench() {
     keys: true,
     vi: false,
     tags: true,
-    scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'cyan' } },
+    scrollbar: { ch: ' ', track: { bg: THEME.surface }, style: { bg: THEME.accent } },
     style: {
-      border: { fg: 'cyan' },
-      selected: { fg: 'black', bg: 'cyan', bold: true },
-      item: { fg: 'white' },
+      bg: THEME.bg,
+      border: { fg: THEME.accent, bg: THEME.bg },
+      label: { fg: THEME.accent, bg: THEME.bg },
+      selected: { fg: THEME.textInverse, bg: THEME.accent, bold: true },
+      item: { fg: THEME.text, bg: THEME.bg },
     },
   });
 
@@ -117,10 +165,15 @@ async function runWorkbench() {
     keys: true,
     vi: true,
     alwaysScroll: true,
-    tags: false,
-    parseTags: false,
-    scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'cyan' } },
-    style: { border: { fg: 'cyan' }, fg: 'white' },
+    tags: true,
+    parseTags: true,
+    scrollbar: { ch: ' ', track: { bg: THEME.surface }, style: { bg: THEME.accent } },
+    style: {
+      bg: THEME.bg,
+      border: { fg: THEME.accent, bg: THEME.bg },
+      fg: THEME.text,
+      label: { fg: THEME.accent, bg: THEME.bg },
+    },
   });
 
   const status = blessed.box({
@@ -130,7 +183,7 @@ async function runWorkbench() {
     bottom: 0,
     height: 3,
     padding: { left: 1, right: 1 },
-    style: { fg: 'white', bg: 'black' },
+    style: { fg: THEME.text, bg: THEME.surface },
   });
 
   const prompt = blessed.prompt({
@@ -141,7 +194,12 @@ async function runWorkbench() {
     top: 'center',
     left: 'center',
     padding: { left: 1, right: 1 },
-    style: { border: { fg: 'yellow' }, fg: 'white', bg: 'black' },
+    style: {
+      border: { fg: THEME.warning, bg: THEME.surface },
+      fg: THEME.text,
+      bg: THEME.surface,
+      label: { fg: THEME.warning, bg: THEME.surface },
+    },
   });
 
   const question = blessed.question({
@@ -152,7 +210,12 @@ async function runWorkbench() {
     top: 'center',
     left: 'center',
     padding: { left: 1, right: 1 },
-    style: { border: { fg: 'red' }, fg: 'white', bg: 'black' },
+    style: {
+      border: { fg: THEME.danger, bg: THEME.surface },
+      fg: THEME.text,
+      bg: THEME.surface,
+      label: { fg: THEME.danger, bg: THEME.surface },
+    },
   });
 
   const backendPicker = blessed.list({
@@ -167,10 +230,13 @@ async function runWorkbench() {
     mouse: true,
     keys: true,
     vi: false,
+    tags: true,
     style: {
-      border: { fg: 'yellow' },
-      selected: { fg: 'black', bg: 'yellow', bold: true },
-      item: { fg: 'white' },
+      bg: THEME.bg,
+      border: { fg: THEME.warning, bg: THEME.bg },
+      label: { fg: THEME.warning, bg: THEME.bg },
+      selected: { fg: THEME.textInverse, bg: THEME.warning, bold: true },
+      item: { fg: THEME.text, bg: THEME.bg },
     },
   });
 
@@ -204,12 +270,34 @@ async function runWorkbench() {
     if (index !== -1) groupIndex = index;
   };
 
-  const currentSessions = () => {
+  const currentGroupSessions = () => {
     const group = currentGroup();
     if (group.kind === 'all') return sessions;
     if (group.kind === 'source') return sessionsForSource(group.source.id);
     return sessions.filter((session) => session.sourceId === group.source.id && session.cwd === group.cwd);
   };
+
+  const normalizedSearch = () => searchQuery.trim().toLowerCase();
+
+  const sessionMatchesSearch = (session) => {
+    const query = normalizedSearch();
+    if (!query) return true;
+    const haystack = [
+      session.backend,
+      session.cwd,
+      session.first,
+      session.id,
+      session.last,
+      session.lastAssistant,
+      session.name,
+      session.note,
+      session.provider,
+      session.sourceLabel,
+    ].filter(Boolean).join('\n').toLowerCase();
+    return haystack.includes(query);
+  };
+
+  const currentSessions = () => currentGroupSessions().filter(sessionMatchesSearch);
 
   const selectedSession = () => currentSessions()[selected] || null;
 
@@ -226,16 +314,9 @@ async function runWorkbench() {
 
   const styledListLabel = (color, text) => `{${color}-fg}{bold}${blessed.escape(text)}{/}`;
 
-  const backendThemes = {
-    claude: 'yellow',
-    codex: 'cyan',
-    pi: 'magenta',
-    opencode: 'green',
-  };
-
   const backendLabel = (backend, width = 0) => {
     const text = backend || 'unknown';
-    const color = backendThemes[text] || 'yellow';
+    const color = THEME.backend[text] || THEME.backend.unknown;
     return `{${color}-fg}{bold}${blessed.escape(text.padEnd(width))}{/}`;
   };
 
@@ -247,53 +328,58 @@ async function runWorkbench() {
     const width = Math.max(12, projectWidth - 4);
     const head = `= ${text} `;
     const line = `${head}${'='.repeat(width)}`.slice(0, width);
-    return styledListLabel('yellow', line);
+    return styledListLabel(THEME.tag.warning, line);
   };
 
   const projectLabel = (group) => {
-    if (group.kind === 'all') return styledListLabel('white', `0 All (${sessions.length})`);
+    if (group.kind === 'all') return styledListLabel(THEME.tag.text, `0 All (${sessions.length})`);
     if (group.kind === 'source') {
       const count = sessionsForSource(group.source.id).length;
       return machineLabel(group.source, count);
     }
     const count = sessions.filter((session) => session.sourceId === group.source.id && session.cwd === group.cwd).length;
     const base = path.basename(group.cwd) || group.cwd;
-    return `  ${blessed.escape(`${truncate(base, Math.max(10, projectWidth - 12))} (${count})`)}`;
+    return `{${THEME.tag.muted}-fg}  ${blessed.escape(`${truncate(base, Math.max(10, projectWidth - 12))} (${count})`)}{/}`;
   };
 
   const sessionLabel = (session) => {
     const title = session.name || session.first || session.last || '(no prompt)';
     const width = Math.max(24, (screen.width || 80) - projectWidth - 8);
-    const backendWidth = Math.max(8, Math.min(12, String(session.backend || 'unknown').length + 2));
+    const backendWidth = 11;
     const time = truncate(localTime(session.updatedAt), 18).padEnd(18);
     const detailWidth = Math.max(12, width - backendWidth - 22);
-    return `${backendLabel(session.backend, backendWidth)}  ${time}  ${blessed.escape(truncate(title, detailWidth))}`;
+    return `${backendLabel(session.backend, backendWidth)}  {${THEME.tag.muted}-fg}${blessed.escape(time)}{/}  ${blessed.escape(truncate(title, detailWidth))}`;
   };
 
   const detailContent = (session) => {
-    if (!session) return 'No sessions in this project.';
+    if (!session) return `{${THEME.tag.muted}-fg}No sessions match this view.{/}`;
     const title = session.name || session.first || session.last || '(no prompt)';
     return [
-      title,
+      `{${THEME.tag.accent}-fg}{bold}${blessed.escape(title)}{/}`,
       '',
-      `id:       ${session.id}`,
-      `backend:  ${session.backend || 'unknown'}`,
-      `source:   ${session.sourceLabel || 'Local'}`,
-      `cwd:      ${session.cwd}`,
-      `started:  ${localTime(session.startedAt)}`,
-      `updated:  ${localTime(session.updatedAt)}`,
-      `turns:    ${session.turns}`,
-      session.note ? `note:     ${session.note}` : '',
+      `{${THEME.tag.muted}-fg}Session{/}`,
+      `  backend  ${session.backend || 'unknown'}`,
+      `  id       ${session.id}`,
+      `  source   ${session.sourceLabel || 'Local'}`,
+      `  cwd      ${session.cwd}`,
       '',
-      `last user:      ${session.last || session.first || ''}`,
+      `{${THEME.tag.muted}-fg}Timeline{/}`,
+      `  started  ${localTime(session.startedAt)}`,
+      `  updated  ${localTime(session.updatedAt)}`,
+      `  turns    ${session.turns}`,
+      session.note ? `\n{${THEME.tag.muted}-fg}Note{/}\n  ${session.note}` : '',
       '',
-      `last assistant: ${session.lastAssistant || ''}`,
+      `{${THEME.tag.muted}-fg}Last user{/}`,
+      `${session.last || session.first || ''}`,
+      '',
+      `{${THEME.tag.muted}-fg}Last assistant{/}`,
+      `${session.lastAssistant || ''}`,
     ].filter((line) => line !== '').join('\n');
   };
 
   const setMessage = (text, isError = false) => {
     message = text || 'Ready';
-    status.style.fg = isError ? 'red' : 'white';
+    status.style.fg = isError ? THEME.danger : THEME.text;
   };
 
   const visibleSession = (session) => !session.archived;
@@ -429,7 +515,9 @@ async function runWorkbench() {
   const syncList = () => {
     const visible = currentSessions();
     const listRows = Math.max(1, (sessionsList.height || Math.floor((screen.height || 24) * 0.4)) - 2);
-    const items = visible.length ? visible.map(sessionLabel) : ['No sessions in this project.'];
+    const items = visible.length
+      ? visible.map(sessionLabel)
+      : [`{${THEME.tag.muted}-fg}${searchQuery ? 'No sessions match this search.' : 'No sessions in this project.'}{/}`];
     while (items.length < listRows) items.push('');
     syncingList = true;
     sessionsList.clearItems();
@@ -445,8 +533,8 @@ async function runWorkbench() {
   const setPanelLabel = (panel, title, focused, fg) => {
     panel.setLabel(focused ? ` > ${title} ` : `   ${title} `);
     if (!panel._label) return;
-    panel._label.style.fg = focused ? fg : 'white';
-    panel._label.style.bg = 'default';
+    panel._label.style.fg = focused ? fg : THEME.textMuted;
+    panel._label.style.bg = THEME.bg;
     panel._label.style.bold = focused;
   };
 
@@ -455,33 +543,39 @@ async function runWorkbench() {
     const sessionsFocused = activePanel === 'sessions';
     const detailFocused = activePanel === 'details';
 
-    projectsList.style.border.fg = projectFocused ? 'green' : 'gray';
-    sessionsList.style.border.fg = sessionsFocused ? 'cyan' : 'gray';
-    detailBox.style.border.fg = detailFocused ? 'yellow' : 'gray';
-    projectsList.style.selected.bg = projectFocused ? 'green' : 'gray';
-    projectsList.style.selected.fg = 'black';
-    sessionsList.style.selected.bg = sessionsFocused ? 'cyan' : 'gray';
-    sessionsList.style.selected.fg = 'black';
+    projectsList.style.border.fg = projectFocused ? THEME.project : THEME.borderIdle;
+    projectsList.style.border.bg = THEME.bg;
+    sessionsList.style.border.fg = sessionsFocused ? THEME.accent : THEME.borderIdle;
+    sessionsList.style.border.bg = THEME.bg;
+    detailBox.style.border.fg = detailFocused ? THEME.detail : THEME.borderIdle;
+    detailBox.style.border.bg = THEME.bg;
+    projectsList.style.selected.bg = projectFocused ? THEME.project : THEME.surfaceMuted;
+    projectsList.style.selected.fg = THEME.textInverse;
+    sessionsList.style.selected.bg = sessionsFocused ? THEME.accent : THEME.surfaceMuted;
+    sessionsList.style.selected.fg = THEME.textInverse;
 
-    setPanelLabel(projectsList, `Sources (${sources.length})`, projectFocused, 'green');
-    setPanelLabel(sessionsList, 'Sessions', sessionsFocused, 'cyan');
-    setPanelLabel(detailBox, 'Details', detailFocused, 'yellow');
+    setPanelLabel(projectsList, `Sources (${sources.length})`, projectFocused, THEME.project);
+    setPanelLabel(sessionsList, searchQuery ? `Sessions / ${searchQuery}` : 'Sessions', sessionsFocused, THEME.accent);
+    setPanelLabel(detailBox, 'Details', detailFocused, THEME.detail);
 
     const firstLine = message || 'Ready';
+    const searchHelp = searchQuery ? `  search "${searchQuery}"  x clear` : '  / search';
     if (projectFocused) {
-      status.setContent(`${firstLine}\nSources: ↑/↓ select  0 all  1-9 machine  [/] prev/next  n new  → sessions  q quit`);
+      status.setContent(`${firstLine}\nSources: ↑/↓ select  0 all  1-9 machine  [/] prev/next  n new${searchHelp}  → sessions  q quit`);
     } else if (detailFocused) {
-      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  1-9 machine  [/] prev/next  n new  ← sessions  q quit`);
+      status.setContent(`${firstLine}\nDetails: ↑/↓ scroll  1-9 machine  [/] prev/next  n new${searchHelp}  ← sessions  q quit`);
     } else {
-      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter resume  1-9 machine  [/] prev/next  r rename  n new  d delete`);
+      status.setContent(`${firstLine}\nSessions: ↑/↓ select  Enter resume  r rename  n new  d delete${searchHelp}  q quit`);
     }
   };
 
   const render = () => {
     applyLayout();
     const visible = currentSessions();
+    const groupTotal = currentGroupSessions().length;
     const updateText = updateInfo ? `  Update available: v${updateInfo.latestVersion}` : '';
-    header.setContent(` ${appTitle}${updateText}\n ${visible.length}/${sessions.length} visible  ${groupDisplayName(currentGroup())}`);
+    const searchText = searchQuery ? `  search: ${searchQuery}` : '';
+    header.setContent(` ${appTitle}${updateText}\n ${visible.length}/${groupTotal} shown  ${groupDisplayName(currentGroup())}${searchText}`);
     detailBox.setContent(detailContent(selectedSession()));
     updateFocusStyles();
     screen.render();
@@ -521,7 +615,10 @@ async function runWorkbench() {
 
     backendPickerState = { backends, resolve };
     backendPicker.clearItems();
-    backendPicker.setItems(backends.map((backend) => `${backend.id}  ${backend.label || backend.id}`));
+    backendPicker.setItems(backends.map((backend) => {
+      const id = String(backend.id);
+      return `${backendLabel(id, 11)}  ${blessed.escape(backend.label || id)}`;
+    }));
     backendPicker.select(0);
     backendPicker.show();
     backendPicker.setFront();
@@ -533,6 +630,7 @@ async function runWorkbench() {
     askInput,
     focusOnClose: () => focusPanel(projectsList, 'projects'),
     screen,
+    theme: THEME,
     truncate,
   });
 
@@ -830,6 +928,25 @@ async function runWorkbench() {
   screen.key(['['], () => {
     if (promptOpen()) return;
     switchSource(-1);
+  });
+
+  screen.key(['/'], async () => {
+    if (promptOpen()) return;
+    const value = await askInput('Search', searchQuery);
+    if (value === null) return render();
+    searchQuery = value.trim();
+    selected = 0;
+    syncList();
+    render();
+  });
+
+  screen.key(['x'], () => {
+    if (promptOpen() || !searchQuery) return;
+    searchQuery = '';
+    selected = 0;
+    setMessage('Search cleared.');
+    syncList();
+    render();
   });
 
   screen.key(['q', 'escape', 'C-c'], () => {

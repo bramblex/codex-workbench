@@ -6,13 +6,23 @@ const blessed = require('blessed');
 const { createChildDirectory, directoryNameError, listDirectories } = require('../model/directories');
 
 const DEFAULT_HELP = '↑/↓ move  ←/h parent  →/l child  n new directory  Enter choose selected  Esc/q cancel';
+const color = (hex) => blessed.colors.match(hex);
+
+const FALLBACK_THEME = {
+  bg: color('#101216'),
+  surface: color('#151a21'),
+  text: color('#e5e7eb'),
+  textInverse: color('#0b0f14'),
+  project: color('#22c55e'),
+  danger: color('#f87171'),
+};
 
 const DEFAULT_OPS = {
   listDirectories: (dir) => listDirectories(dir),
   createDirectory: (parent, name) => createChildDirectory(parent, name),
 };
 
-function createDirectoryPicker({ screen, askInput, focusOnClose, truncate }) {
+function createDirectoryPicker({ screen, askInput, focusOnClose, theme = FALLBACK_THEME, truncate }) {
   const list = blessed.list({
     parent: screen,
     label: ' Choose directory ',
@@ -25,11 +35,13 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, truncate }) {
     mouse: true,
     keys: true,
     vi: false,
-    scrollbar: { ch: ' ', track: { bg: 'black' }, style: { bg: 'green' } },
+    scrollbar: { ch: ' ', track: { bg: theme.surface }, style: { bg: theme.project } },
     style: {
-      border: { fg: 'green' },
-      selected: { fg: 'black', bg: 'green', bold: true },
-      item: { fg: 'white' },
+      bg: theme.bg,
+      border: { fg: theme.project, bg: theme.bg },
+      label: { fg: theme.project, bg: theme.bg },
+      selected: { fg: theme.textInverse, bg: theme.project, bold: true },
+      item: { fg: theme.text, bg: theme.bg },
     },
   });
 
@@ -42,7 +54,12 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, truncate }) {
     border: 'line',
     padding: { left: 1, right: 1 },
     content: DEFAULT_HELP,
-    style: { border: { fg: 'green' }, fg: 'white', bg: 'black' },
+    style: {
+      bg: theme.surface,
+      border: { fg: theme.project, bg: theme.surface },
+      fg: theme.text,
+      label: { fg: theme.project, bg: theme.surface },
+    },
   });
 
   let state = null;
@@ -51,7 +68,8 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, truncate }) {
 
   const setHelp = (text = DEFAULT_HELP, isError = false) => {
     help.setContent(text);
-    help.style.fg = isError ? 'red' : 'white';
+    help.style.fg = isError ? theme.danger : theme.text;
+    help.style.bg = theme.surface;
   };
 
   const entriesFor = (dir) => {
