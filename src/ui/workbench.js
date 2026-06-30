@@ -35,7 +35,7 @@ const THEME = {
   text: color('#f8fafc'),
   textMuted: color('#a5f3fc'),
   textOnAccent: color('#ffffff'),
-  borderIdle: color('#60a5fa'),
+  borderIdle: color('#ffffff'),
   accent: color('#5eead4'),
   accentAlt: color('#1d4ed8'),
   project: color('#86efac'),
@@ -148,7 +148,7 @@ async function runWorkbench() {
     scrollbar: { ch: ' ', track: { bg: THEME.surfaceRaised }, style: { bg: THEME.accent } },
     style: {
       bg: THEME.surface,
-      border: { fg: THEME.accent, bg: THEME.surface },
+      border: { fg: THEME.borderIdle, bg: THEME.surface },
       label: { fg: THEME.accent, bg: THEME.surface },
       selected: { fg: THEME.textOnAccent, bg: THEME.selectedAccent, bold: true },
       item: { fg: THEME.text, bg: THEME.surface },
@@ -174,7 +174,7 @@ async function runWorkbench() {
     scrollbar: { ch: ' ', track: { bg: THEME.surfaceRaised }, style: { bg: THEME.accent } },
     style: {
       bg: THEME.surface,
-      border: { fg: THEME.accent, bg: THEME.surface },
+      border: { fg: THEME.borderIdle, bg: THEME.surface },
       fg: THEME.text,
       label: { fg: THEME.accent, bg: THEME.surface },
     },
