@@ -9,12 +9,13 @@ const DEFAULT_HELP = '↑/↓ move  ←/h parent  →/l child  n new directory  
 const color = (hex) => blessed.colors.match(hex);
 
 const FALLBACK_THEME = {
-  bg: color('#1b1f27'),
-  surface: color('#252b35'),
-  surfaceRaised: color('#303744'),
+  bg: color('#111c2f'),
+  surface: color('#172554'),
+  surfaceRaised: color('#1e3a8a'),
   text: color('#f8fafc'),
-  textInverse: color('#111827'),
+  textOnAccent: color('#ffffff'),
   project: color('#86efac'),
+  selectedProject: color('#15803d'),
   danger: color('#fb7185'),
 };
 
@@ -41,7 +42,7 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, theme = FALLBAC
       bg: theme.surfaceRaised || theme.surface,
       border: { fg: theme.project, bg: theme.surfaceRaised || theme.surface },
       label: { fg: theme.project, bg: theme.surfaceRaised || theme.surface },
-      selected: { fg: theme.textInverse, bg: theme.project, bold: true },
+      selected: { fg: theme.textOnAccent || theme.text, bg: theme.selectedProject || theme.project, bold: true },
       item: { fg: theme.text, bg: theme.surfaceRaised || theme.surface },
     },
   });

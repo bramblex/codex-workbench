@@ -27,25 +27,28 @@ const { createDirectoryPicker } = require('./directory-picker');
 const color = (hex) => blessed.colors.match(hex);
 
 const THEME = {
-  bg: color('#1b1f27'),
-  surface: color('#252b35'),
-  surfaceRaised: color('#303744'),
-  surfaceMuted: color('#4b5563'),
+  bg: color('#111c2f'),
+  surface: color('#172554'),
+  surfaceRaised: color('#1e3a8a'),
+  surfaceMuted: color('#581c87'),
   text: color('#f8fafc'),
-  textMuted: color('#cbd5e1'),
-  textInverse: color('#111827'),
-  borderIdle: color('#94a3b8'),
+  textMuted: color('#a5f3fc'),
+  textOnAccent: color('#ffffff'),
+  borderIdle: color('#60a5fa'),
   accent: color('#5eead4'),
-  accentAlt: color('#334155'),
+  accentAlt: color('#1d4ed8'),
   project: color('#86efac'),
   detail: color('#fbbf24'),
   warning: color('#fde047'),
   danger: color('#fb7185'),
   success: color('#6ee7b7'),
+  selectedAccent: color('#0f766e'),
+  selectedProject: color('#15803d'),
+  selectedWarning: color('#a16207'),
   tag: {
     accent: 'cyan',
     detail: 'yellow',
-    muted: 'gray',
+    muted: 'bright-cyan',
     text: 'white',
     warning: 'yellow',
   },
@@ -124,7 +127,7 @@ async function runWorkbench() {
       bg: THEME.surface,
       border: { fg: THEME.project, bg: THEME.surface },
       label: { fg: THEME.project, bg: THEME.surface },
-      selected: { fg: THEME.textInverse, bg: THEME.project, bold: true },
+      selected: { fg: THEME.textOnAccent, bg: THEME.selectedProject, bold: true },
       item: { fg: THEME.text, bg: THEME.surface },
     },
   });
@@ -146,7 +149,7 @@ async function runWorkbench() {
       bg: THEME.surface,
       border: { fg: THEME.accent, bg: THEME.surface },
       label: { fg: THEME.accent, bg: THEME.surface },
-      selected: { fg: THEME.textInverse, bg: THEME.accent, bold: true },
+      selected: { fg: THEME.textOnAccent, bg: THEME.selectedAccent, bold: true },
       item: { fg: THEME.text, bg: THEME.surface },
     },
   });
@@ -235,7 +238,7 @@ async function runWorkbench() {
       bg: THEME.surfaceRaised,
       border: { fg: THEME.warning, bg: THEME.surfaceRaised },
       label: { fg: THEME.warning, bg: THEME.surfaceRaised },
-      selected: { fg: THEME.textInverse, bg: THEME.warning, bold: true },
+      selected: { fg: THEME.textOnAccent, bg: THEME.selectedWarning, bold: true },
       item: { fg: THEME.text, bg: THEME.surfaceRaised },
     },
   });
@@ -549,10 +552,10 @@ async function runWorkbench() {
     sessionsList.style.border.bg = THEME.surface;
     detailBox.style.border.fg = detailFocused ? THEME.detail : THEME.borderIdle;
     detailBox.style.border.bg = THEME.surface;
-    projectsList.style.selected.bg = projectFocused ? THEME.project : THEME.surfaceMuted;
-    projectsList.style.selected.fg = projectFocused ? THEME.textInverse : THEME.text;
-    sessionsList.style.selected.bg = sessionsFocused ? THEME.accent : THEME.surfaceMuted;
-    sessionsList.style.selected.fg = sessionsFocused ? THEME.textInverse : THEME.text;
+    projectsList.style.selected.bg = projectFocused ? THEME.selectedProject : THEME.surfaceMuted;
+    projectsList.style.selected.fg = THEME.textOnAccent;
+    sessionsList.style.selected.bg = sessionsFocused ? THEME.selectedAccent : THEME.surfaceMuted;
+    sessionsList.style.selected.fg = THEME.textOnAccent;
 
     setPanelLabel(projectsList, `Sources (${sources.length})`, projectFocused, THEME.project);
     setPanelLabel(sessionsList, searchQuery ? `Sessions / ${searchQuery}` : 'Sessions', sessionsFocused, THEME.accent);
