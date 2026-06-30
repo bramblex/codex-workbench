@@ -372,7 +372,12 @@ function Workbench({ ink }) {
       return;
     }
     if (key.tab) {
-      setState((prev) => ({ ...prev, active: prev.active === 'projects' ? 'sessions' : prev.active === 'sessions' ? 'details' : 'projects' }));
+      setState((prev) => ({
+        ...prev,
+        active: tiny
+          ? (prev.active === 'projects' ? 'sessions' : 'projects')
+          : (prev.active === 'projects' ? 'sessions' : prev.active === 'sessions' ? 'details' : 'projects'),
+      }));
       return;
     }
     if (input === '0') {
@@ -447,7 +452,7 @@ function Workbench({ ink }) {
         return;
       }
       if (key.rightArrow || input === 'l') {
-        setState((prev) => ({ ...prev, active: 'details' }));
+        if (!tiny) setState((prev) => ({ ...prev, active: 'details' }));
         return;
       }
       if (key.return && selectedSession) {
@@ -572,16 +577,48 @@ function Workbench({ ink }) {
   const width = size.width || 100;
   const height = size.height || 30;
   const projectWidth = Math.min(42, Math.max(24, Math.floor(width * 0.28)));
-  const mainHeight = Math.max(10, height - 6);
-  const listHeight = Math.max(7, Math.floor(mainHeight * 0.45));
+  const compact = height < 22;
+  const tiny = height < 16;
+  const effectiveActive = tiny && state.active === 'details' ? 'sessions' : state.active;
+  const headerHeight = compact ? 2 : 3;
+  const footerHeight = compact ? 2 : 3;
+  const mainHeight = Math.max(4, height - headerHeight - footerHeight);
+  const listHeight = tiny ? mainHeight : Math.max(4, Math.floor(mainHeight * 0.45));
+  const detailHeight = Math.max(0, mainHeight - listHeight);
   const projectRowCount = Math.max(1, mainHeight - 4);
   const projectOffset = Math.max(0, Math.min(state.groupIndex - projectRowCount + 1, Math.max(0, state.groups.length - projectRowCount)));
   const projectRows = state.groups.slice(projectOffset, projectOffset + projectRowCount);
   const sessionRowCount = Math.max(1, listHeight - 3);
   const sessionOffset = Math.max(0, Math.min(selected - sessionRowCount + 1, Math.max(0, visibleSessions.length - sessionRowCount)));
   const sessionRows = visibleSessions.slice(sessionOffset, sessionOffset + sessionRowCount);
+  const detailRowCount = tiny ? 0 : Math.max(1, detailHeight - 4);
   const projectEmptyRows = Array.from({ length: Math.max(0, projectRowCount - projectRows.length) });
   const sessionEmptyRows = Array.from({ length: Math.max(0, sessionRowCount - sessionRows.length) });
+  const detailWidth = Math.max(30, width - projectWidth - 6);
+  const detailRows = selectedSession ? [
+    { text: truncate(displayTitle(selectedSession), Math.max(20, detailWidth - 2)), color: THEME.accent, bold: true },
+    { text: '', color: THEME.text },
+    { text: 'Session', color: THEME.muted },
+    { text: `  backend  ${selectedSession.backend || 'unknown'}${selectedSession.open ? '  open' : ''}`, color: THEME.text },
+    { text: `  id       ${selectedSession.id}`, color: THEME.text },
+    { text: `  source   ${selectedSession.sourceLabel || 'Local'}`, color: THEME.text },
+    { text: `  cwd      ${selectedSession.cwd}`, color: THEME.text },
+    { text: '', color: THEME.text },
+    { text: 'Timeline', color: THEME.muted },
+    { text: `  started  ${localTime(selectedSession.startedAt)}`, color: THEME.text },
+    { text: `  updated  ${localTime(selectedSession.updatedAt)}`, color: THEME.text },
+    { text: `  turns    ${selectedSession.turns}`, color: THEME.text },
+    ...(selectedSession.note ? [
+      { text: 'Note', color: THEME.muted },
+      { text: `  ${truncate(selectedSession.note, detailWidth)}`, color: THEME.text },
+    ] : []),
+    { text: '', color: THEME.text },
+    { text: 'Last user', color: THEME.muted },
+    { text: truncate(selectedSession.last || selectedSession.first || '', detailWidth), color: THEME.text },
+    { text: '', color: THEME.text },
+    { text: 'Last assistant', color: THEME.muted },
+    { text: truncate(selectedSession.lastAssistant || '', detailWidth), color: THEME.text },
+  ].slice(0, detailRowCount) : [];
   const shownText = `${visibleSessions.length}/${groupSessionList.length} shown`;
   const updateText = state.updateInfo ? ` update v${state.updateInfo.latestVersion}` : '';
   const headerTitle = fixedWidth(`Codex Workbench v${pkg.version}${updateText}`, width - 2);
@@ -589,23 +626,23 @@ function Workbench({ ink }) {
   const searchHelp = state.search ? `  search "${state.search}"  x clear` : '  / search';
   const statusText = fixedWidth(state.remoteLoading ? `${state.message}...` : state.message, width - 2);
   const helpText = fixedWidth(
-    state.active === 'projects'
+    effectiveActive === 'projects'
       ? `Sources: ↑/↓ select  0 all  1-9 machine  [/] prev/next  n new${searchHelp}  → sessions  q quit`
-      : state.active === 'details'
+      : effectiveActive === 'details'
         ? `Details: ↑/↓ scroll  1-9 machine  [/] prev/next  n new${searchHelp}  ← sessions  q quit`
         : `Sessions: ↑/↓ select  Enter resume  r rename  n new  d delete${searchHelp}  q quit`,
     width - 2,
   );
 
   return h(Box, { flexDirection: 'column', minHeight: height, backgroundColor: THEME.bg },
-    h(Box, { backgroundColor: THEME.header, paddingX: 1, height: 3, flexDirection: 'column' },
+    h(Box, { backgroundColor: THEME.header, paddingX: 1, height: headerHeight, flexDirection: 'column' },
       h(Text, { color: THEME.text, bold: true, wrap: 'truncate-end' }, headerTitle),
       h(Text, { color: THEME.muted, wrap: 'truncate-end' }, headerMeta),
-      h(Text, { color: THEME.header }, fillLine(width - 2)),
+      !compact ? h(Text, { color: THEME.header }, fillLine(width - 2)) : null,
     ),
     h(Box, { flexDirection: 'row', flexGrow: 1 },
-      h(Box, boxProps(state.active === 'projects', THEME.project, { width: projectWidth, flexShrink: 0 }),
-        panelTitle(`Sources (${state.sources.length})`, state.active === 'projects', THEME.project),
+      h(Box, boxProps(effectiveActive === 'projects', THEME.project, { width: projectWidth, flexShrink: 0 }),
+        panelTitle(`Sources (${state.sources.length})`, effectiveActive === 'projects', THEME.project),
         ...projectRows.map((group) => {
           const index = state.groups.indexOf(group);
           const selectedGroup = index === state.groupIndex;
@@ -624,8 +661,8 @@ function Workbench({ ink }) {
         }, fixedWidth('', projectWidth - 4))),
       ),
       h(Box, { flexDirection: 'column', flexGrow: 1 },
-        h(Box, boxProps(state.active === 'sessions', THEME.accent, { height: listHeight }),
-          panelTitle(state.search ? `Sessions / ${state.search}` : 'Sessions', state.active === 'sessions', THEME.accent),
+        h(Box, boxProps(effectiveActive === 'sessions', THEME.accent, { height: listHeight }),
+          panelTitle(state.search ? `Sessions / ${state.search}` : 'Sessions', effectiveActive === 'sessions', THEME.accent),
           ...(sessionRows.length ? sessionRows.map((session) => {
             const isSelected = session === selectedSession;
             const rowWidth = Math.max(20, width - projectWidth - 6);
@@ -648,39 +685,25 @@ function Workbench({ ink }) {
             wrap: 'truncate-end',
           }, fixedWidth('', Math.max(20, width - projectWidth - 6)))),
         ),
-        h(Box, boxProps(state.active === 'details', THEME.detail, { flexGrow: 1 }),
-          panelTitle('Details', state.active === 'details', THEME.detail),
+        !tiny ? h(Box, boxProps(effectiveActive === 'details', THEME.detail, { flexGrow: 1 }),
+          panelTitle('Details', effectiveActive === 'details', THEME.detail),
           selectedSession
             ? h(Box, { flexDirection: 'column' },
-              h(Text, { color: THEME.accent, bold: true }, truncate(displayTitle(selectedSession), Math.max(20, width - projectWidth - 8))),
-              h(Text, null, ''),
-              h(Text, { color: THEME.muted }, 'Session'),
-              h(Text, { color: THEME.text }, `  backend  ${selectedSession.backend || 'unknown'}${selectedSession.open ? '  open' : ''}`),
-              h(Text, { color: THEME.text }, `  id       ${selectedSession.id}`),
-              h(Text, { color: THEME.text }, `  source   ${selectedSession.sourceLabel || 'Local'}`),
-              h(Text, { color: THEME.text }, `  cwd      ${selectedSession.cwd}`),
-              h(Text, null, ''),
-              h(Text, { color: THEME.muted }, 'Timeline'),
-              h(Text, { color: THEME.text }, `  started  ${localTime(selectedSession.startedAt)}`),
-              h(Text, { color: THEME.text }, `  updated  ${localTime(selectedSession.updatedAt)}`),
-              h(Text, { color: THEME.text }, `  turns    ${selectedSession.turns}`),
-              selectedSession.note ? h(Text, { color: THEME.muted }, 'Note') : null,
-              selectedSession.note ? h(Text, { color: THEME.text }, `  ${truncate(selectedSession.note, Math.max(30, width - projectWidth - 6))}`) : null,
-              h(Text, null, ''),
-              h(Text, { color: THEME.muted }, 'Last user'),
-              h(Text, { color: THEME.text }, truncate(selectedSession.last || selectedSession.first || '', Math.max(30, width - projectWidth - 6))),
-              h(Text, null, ''),
-              h(Text, { color: THEME.muted }, 'Last assistant'),
-              h(Text, { color: THEME.text }, truncate(selectedSession.lastAssistant || '', Math.max(30, width - projectWidth - 6))),
+              ...detailRows.map((row, index) => h(Text, {
+                key: `detail-${index}`,
+                color: row.color,
+                bold: row.bold,
+                wrap: 'truncate-end',
+              }, fixedWidth(row.text, detailWidth))),
             )
             : h(Text, { color: THEME.muted }, 'No sessions match this view.'),
-        ),
+        ) : null,
       ),
     ),
-    h(Box, { height: 3, paddingX: 1, flexDirection: 'column', backgroundColor: THEME.panel },
+    h(Box, { height: footerHeight, paddingX: 1, flexDirection: 'column', backgroundColor: THEME.panel },
       h(Text, { color: state.message.startsWith('error') ? THEME.danger : THEME.text, wrap: 'truncate-end' }, statusText),
       h(Text, { color: THEME.muted, wrap: 'truncate-end' }, helpText),
-      h(Text, { color: THEME.panel }, fillLine(width - 2)),
+      !compact ? h(Text, { color: THEME.panel }, fillLine(width - 2)) : null,
     ),
     state.prompt ? h(Box, { position: 'absolute', top: 4, left: 6, width: Math.max(40, Math.floor((size.width || 80) * 0.7)), borderStyle: 'round', borderColor: THEME.warning, paddingX: 1, flexDirection: 'column', backgroundColor: THEME.panel },
       h(Text, { color: THEME.warning, bold: true }, state.prompt.label),
