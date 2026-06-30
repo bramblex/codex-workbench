@@ -42,7 +42,9 @@
     "node": ">=18"
   },
   "dependencies": {
-    "blessed": "^0.1.81"
+    "blessed": "^0.1.81",
+    "ink": "^5.2.1",
+    "react": "^18.3.1"
   },
   "devDependencies": {
     "blessed-xterm": "^1.5.1",

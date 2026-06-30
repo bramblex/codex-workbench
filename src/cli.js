@@ -23,7 +23,7 @@ const {
   runSourceSessionCommand,
 } = require('./services/session-sources');
 const { getProvider } = require('./providers');
-const { runWorkbench } = require('./ui/workbench');
+const { runWorkbench } = require('./ui/ink-workbench');
 const { createChildDirectory, listDirectories } = require('./model/directories');
 
 function parseFlags(args) {
