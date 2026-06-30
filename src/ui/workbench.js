@@ -27,21 +27,21 @@ const { createDirectoryPicker } = require('./directory-picker');
 const color = (hex) => blessed.colors.match(hex);
 
 const THEME = {
-  bg: color('#101216'),
-  surface: color('#151a21'),
-  surfaceRaised: color('#1f2630'),
-  surfaceMuted: color('#343b46'),
-  text: color('#e5e7eb'),
-  textMuted: color('#8b95a1'),
-  textInverse: color('#0b0f14'),
-  borderIdle: color('#3f4652'),
-  accent: color('#38bdf8'),
-  accentAlt: color('#2563eb'),
-  project: color('#22c55e'),
-  detail: color('#f59e0b'),
-  warning: color('#facc15'),
-  danger: color('#f87171'),
-  success: color('#34d399'),
+  bg: color('#1b1f27'),
+  surface: color('#252b35'),
+  surfaceRaised: color('#303744'),
+  surfaceMuted: color('#4b5563'),
+  text: color('#f8fafc'),
+  textMuted: color('#cbd5e1'),
+  textInverse: color('#111827'),
+  borderIdle: color('#94a3b8'),
+  accent: color('#5eead4'),
+  accentAlt: color('#334155'),
+  project: color('#86efac'),
+  detail: color('#fbbf24'),
+  warning: color('#fde047'),
+  danger: color('#fb7185'),
+  success: color('#6ee7b7'),
   tag: {
     accent: 'cyan',
     detail: 'yellow',
@@ -119,13 +119,13 @@ async function runWorkbench() {
     keys: true,
     vi: false,
     tags: true,
-    scrollbar: { ch: ' ', track: { bg: THEME.surface }, style: { bg: THEME.project } },
+    scrollbar: { ch: ' ', track: { bg: THEME.surfaceRaised }, style: { bg: THEME.project } },
     style: {
-      bg: THEME.bg,
-      border: { fg: THEME.project, bg: THEME.bg },
-      label: { fg: THEME.project, bg: THEME.bg },
+      bg: THEME.surface,
+      border: { fg: THEME.project, bg: THEME.surface },
+      label: { fg: THEME.project, bg: THEME.surface },
       selected: { fg: THEME.textInverse, bg: THEME.project, bold: true },
-      item: { fg: THEME.text, bg: THEME.bg },
+      item: { fg: THEME.text, bg: THEME.surface },
     },
   });
 
@@ -141,13 +141,13 @@ async function runWorkbench() {
     keys: true,
     vi: false,
     tags: true,
-    scrollbar: { ch: ' ', track: { bg: THEME.surface }, style: { bg: THEME.accent } },
+    scrollbar: { ch: ' ', track: { bg: THEME.surfaceRaised }, style: { bg: THEME.accent } },
     style: {
-      bg: THEME.bg,
-      border: { fg: THEME.accent, bg: THEME.bg },
-      label: { fg: THEME.accent, bg: THEME.bg },
+      bg: THEME.surface,
+      border: { fg: THEME.accent, bg: THEME.surface },
+      label: { fg: THEME.accent, bg: THEME.surface },
       selected: { fg: THEME.textInverse, bg: THEME.accent, bold: true },
-      item: { fg: THEME.text, bg: THEME.bg },
+      item: { fg: THEME.text, bg: THEME.surface },
     },
   });
 
@@ -167,12 +167,12 @@ async function runWorkbench() {
     alwaysScroll: true,
     tags: true,
     parseTags: true,
-    scrollbar: { ch: ' ', track: { bg: THEME.surface }, style: { bg: THEME.accent } },
+    scrollbar: { ch: ' ', track: { bg: THEME.surfaceRaised }, style: { bg: THEME.accent } },
     style: {
-      bg: THEME.bg,
-      border: { fg: THEME.accent, bg: THEME.bg },
+      bg: THEME.surface,
+      border: { fg: THEME.accent, bg: THEME.surface },
       fg: THEME.text,
-      label: { fg: THEME.accent, bg: THEME.bg },
+      label: { fg: THEME.accent, bg: THEME.surface },
     },
   });
 
@@ -195,10 +195,10 @@ async function runWorkbench() {
     left: 'center',
     padding: { left: 1, right: 1 },
     style: {
-      border: { fg: THEME.warning, bg: THEME.surface },
+      border: { fg: THEME.warning, bg: THEME.surfaceRaised },
       fg: THEME.text,
-      bg: THEME.surface,
-      label: { fg: THEME.warning, bg: THEME.surface },
+      bg: THEME.surfaceRaised,
+      label: { fg: THEME.warning, bg: THEME.surfaceRaised },
     },
   });
 
@@ -211,10 +211,10 @@ async function runWorkbench() {
     left: 'center',
     padding: { left: 1, right: 1 },
     style: {
-      border: { fg: THEME.danger, bg: THEME.surface },
+      border: { fg: THEME.danger, bg: THEME.surfaceRaised },
       fg: THEME.text,
-      bg: THEME.surface,
-      label: { fg: THEME.danger, bg: THEME.surface },
+      bg: THEME.surfaceRaised,
+      label: { fg: THEME.danger, bg: THEME.surfaceRaised },
     },
   });
 
@@ -232,11 +232,11 @@ async function runWorkbench() {
     vi: false,
     tags: true,
     style: {
-      bg: THEME.bg,
-      border: { fg: THEME.warning, bg: THEME.bg },
-      label: { fg: THEME.warning, bg: THEME.bg },
+      bg: THEME.surfaceRaised,
+      border: { fg: THEME.warning, bg: THEME.surfaceRaised },
+      label: { fg: THEME.warning, bg: THEME.surfaceRaised },
       selected: { fg: THEME.textInverse, bg: THEME.warning, bold: true },
-      item: { fg: THEME.text, bg: THEME.bg },
+      item: { fg: THEME.text, bg: THEME.surfaceRaised },
     },
   });
 
@@ -534,7 +534,7 @@ async function runWorkbench() {
     panel.setLabel(focused ? ` > ${title} ` : `   ${title} `);
     if (!panel._label) return;
     panel._label.style.fg = focused ? fg : THEME.textMuted;
-    panel._label.style.bg = THEME.bg;
+    panel._label.style.bg = THEME.surface;
     panel._label.style.bold = focused;
   };
 
@@ -544,15 +544,15 @@ async function runWorkbench() {
     const detailFocused = activePanel === 'details';
 
     projectsList.style.border.fg = projectFocused ? THEME.project : THEME.borderIdle;
-    projectsList.style.border.bg = THEME.bg;
+    projectsList.style.border.bg = THEME.surface;
     sessionsList.style.border.fg = sessionsFocused ? THEME.accent : THEME.borderIdle;
-    sessionsList.style.border.bg = THEME.bg;
+    sessionsList.style.border.bg = THEME.surface;
     detailBox.style.border.fg = detailFocused ? THEME.detail : THEME.borderIdle;
-    detailBox.style.border.bg = THEME.bg;
+    detailBox.style.border.bg = THEME.surface;
     projectsList.style.selected.bg = projectFocused ? THEME.project : THEME.surfaceMuted;
-    projectsList.style.selected.fg = THEME.textInverse;
+    projectsList.style.selected.fg = projectFocused ? THEME.textInverse : THEME.text;
     sessionsList.style.selected.bg = sessionsFocused ? THEME.accent : THEME.surfaceMuted;
-    sessionsList.style.selected.fg = THEME.textInverse;
+    sessionsList.style.selected.fg = sessionsFocused ? THEME.textInverse : THEME.text;
 
     setPanelLabel(projectsList, `Sources (${sources.length})`, projectFocused, THEME.project);
     setPanelLabel(sessionsList, searchQuery ? `Sessions / ${searchQuery}` : 'Sessions', sessionsFocused, THEME.accent);

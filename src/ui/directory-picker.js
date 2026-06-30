@@ -9,12 +9,13 @@ const DEFAULT_HELP = '↑/↓ move  ←/h parent  →/l child  n new directory  
 const color = (hex) => blessed.colors.match(hex);
 
 const FALLBACK_THEME = {
-  bg: color('#101216'),
-  surface: color('#151a21'),
-  text: color('#e5e7eb'),
-  textInverse: color('#0b0f14'),
-  project: color('#22c55e'),
-  danger: color('#f87171'),
+  bg: color('#1b1f27'),
+  surface: color('#252b35'),
+  surfaceRaised: color('#303744'),
+  text: color('#f8fafc'),
+  textInverse: color('#111827'),
+  project: color('#86efac'),
+  danger: color('#fb7185'),
 };
 
 const DEFAULT_OPS = {
@@ -35,13 +36,13 @@ function createDirectoryPicker({ screen, askInput, focusOnClose, theme = FALLBAC
     mouse: true,
     keys: true,
     vi: false,
-    scrollbar: { ch: ' ', track: { bg: theme.surface }, style: { bg: theme.project } },
+    scrollbar: { ch: ' ', track: { bg: theme.surfaceRaised || theme.surface }, style: { bg: theme.project } },
     style: {
-      bg: theme.bg,
-      border: { fg: theme.project, bg: theme.bg },
-      label: { fg: theme.project, bg: theme.bg },
+      bg: theme.surfaceRaised || theme.surface,
+      border: { fg: theme.project, bg: theme.surfaceRaised || theme.surface },
+      label: { fg: theme.project, bg: theme.surfaceRaised || theme.surface },
       selected: { fg: theme.textInverse, bg: theme.project, bold: true },
-      item: { fg: theme.text, bg: theme.bg },
+      item: { fg: theme.text, bg: theme.surfaceRaised || theme.surface },
     },
   });
 
