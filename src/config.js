@@ -36,6 +36,8 @@ const CONFIG_PATH = process.env.CWB_CONFIG ||
   process.env.CODEX_WORKBENCH_CONFIG ||
   path.join(CWB_HOME, 'config.json');
 
+const LOCKS_DIR = process.env.CWB_LOCKS_DIR || path.join(CWB_HOME, 'locks');
+
 if (!process.env.CWB_META && !process.env.CODEX_WORKBENCH_META && !process.env.CSM_META) {
   migrateLegacyFile(LEGACY_META_PATH, META_PATH);
 }
@@ -53,6 +55,7 @@ module.exports = {
   PI_CODING_AGENT_DIR,
   PI_SESSIONS_DIR,
   CONFIG_PATH,
+  LOCKS_DIR,
   SESSIONS_DIR: CODEX_SESSIONS_DIR, // backward compat: default sessions dir (legacy)
   META_PATH,
 };

@@ -7,6 +7,7 @@ const pkg = require('../../package.json');
 const { printList, printShow } = require('../cli-output');
 const { deleteSessionFile } = require('../model/session-store');
 const { localTime, shortId, truncate } = require('../model/format');
+const { SessionLockError } = require('../services/session-locks');
 const {
   LOCAL_SOURCE,
   createSourceDirectory,
@@ -348,10 +349,11 @@ async function runWorkbench() {
   const sessionLabel = (session) => {
     const title = session.name || session.first || session.last || '(no prompt)';
     const width = Math.max(24, (screen.width || 80) - projectWidth - 8);
-    const backendWidth = 11;
+    const backendWidth = 9;
     const time = truncate(localTime(session.updatedAt), 18).padEnd(18);
-    const detailWidth = Math.max(12, width - backendWidth - 22);
-    return `${backendLabel(session.backend, backendWidth)}  {${THEME.tag.muted}-fg}${blessed.escape(time)}{/}  ${blessed.escape(truncate(title, detailWidth))}`;
+    const state = session.open ? `{${THEME.tag.warning}-fg}{bold}open{/}` : '    ';
+    const detailWidth = Math.max(12, width - backendWidth - 28);
+    return `${backendLabel(session.backend, backendWidth)} ${state}  {${THEME.tag.muted}-fg}${blessed.escape(time)}{/}  ${blessed.escape(truncate(title, detailWidth))}`;
   };
 
   const detailContent = (session) => {
@@ -708,11 +710,11 @@ async function runWorkbench() {
     selectSourceIndex(nextIndex);
   };
 
-  const runCodexAndReturn = (command, session, args = [], doneText = `${command} finished.`) => {
+  const runCodexAndReturn = (command, session, args = [], doneText = `${command} finished.`, options = {}) => {
     screen.leave();
     let status = 0;
     try {
-      status = runSourceSessionCommand(session, command, args);
+      status = runSourceSessionCommand(session, command, args, options);
     } finally {
       screen.enter();
     }
@@ -841,8 +843,20 @@ async function runWorkbench() {
     screen.render();
   });
 
-  sessionsList.key(['enter'], () => runAction((session) => {
-    runCodexAndReturn('resume', session);
+  sessionsList.key(['enter'], () => runAction(async (session) => {
+    try {
+      runCodexAndReturn('resume', session);
+    } catch (err) {
+      if (!(err instanceof SessionLockError)) throw err;
+      const lock = err.lock || {};
+      const label = `${lock.host || 'unknown'}${lock.pid ? ` pid ${lock.pid}` : ''}`;
+      const confirmed = await askConfirm(`Session is already open on ${label}. Close it and reopen?`);
+      if (!confirmed) {
+        setMessage('Resume cancelled.');
+        return render();
+      }
+      runCodexAndReturn('resume', session, [], 'resume finished.', { force: true });
+    }
   }));
 
   sessionsList.key(['j'], () => {
@@ -881,6 +895,18 @@ async function runWorkbench() {
     if (!backendPickerState) return;
     const backend = backendPickerState.backends[backendPicker.selected];
     closeBackendPicker(backend ? backend.id : null);
+  });
+
+  backendPicker.key(['j', 'down'], () => {
+    if (!backendPickerState) return;
+    backendPicker.down();
+    screen.render();
+  });
+
+  backendPicker.key(['k', 'up'], () => {
+    if (!backendPickerState) return;
+    backendPicker.up();
+    screen.render();
   });
 
   backendPicker.key(['escape', 'q'], () => {

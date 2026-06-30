@@ -3,7 +3,6 @@
 
 const {
   deleteSessionFile,
-  listSessions,
   resolveSession,
   updateMetadata,
 } = require('./model/session-store');
@@ -14,12 +13,15 @@ const {
   usage,
 } = require('./cli-output');
 const {
-  runCodexCommand,
   runNewCodexSession,
   usableCwd,
 } = require('./services/codex-runner');
-const { defaultBackend } = require('./services/session-sources');
-const { listLocalBackends } = require('./services/session-sources');
+const {
+  defaultBackend,
+  listLocalBackends,
+  loadLocalWorkbenchSessions,
+  runSourceSessionCommand,
+} = require('./services/session-sources');
 const { getProvider } = require('./providers');
 const { runWorkbench } = require('./ui/workbench');
 const { createChildDirectory, listDirectories } = require('./model/directories');
@@ -74,7 +76,7 @@ async function main() {
     return undefined;
   }
 
-  const sessions = listSessions();
+  const sessions = loadLocalWorkbenchSessions().sessions;
 
   if (cmd === 'ui') return runWorkbench();
   if (cmd === 'list' || cmd === 'ls') return printList(sessions, flags);
@@ -86,14 +88,14 @@ async function main() {
     getProvider(backend);
     return runNewCodexSession(flags.cwd || process.cwd(), flags._, true, backend);
   }
-  if (cmd === 'resume') return runCodexCommand('resume', resolveSession(flags._[0], sessions), flags._.slice(1), true);
-  if (cmd === 'fork') return runCodexCommand('fork', resolveSession(flags._[0], sessions), [], true);
-  if (cmd === 'archive') return runCodexCommand('archive', resolveSession(flags._[0], sessions));
-  if (cmd === 'unarchive') return runCodexCommand('unarchive', resolveSession(flags._[0], sessions));
+  if (cmd === 'resume') return runSourceSessionCommand(resolveSession(flags._[0], sessions), 'resume', flags._.slice(1), { force: flags.force, inherit: true });
+  if (cmd === 'fork') return runSourceSessionCommand(resolveSession(flags._[0], sessions), 'fork', [], { inherit: true });
+  if (cmd === 'archive') return runSourceSessionCommand(resolveSession(flags._[0], sessions), 'archive');
+  if (cmd === 'unarchive') return runSourceSessionCommand(resolveSession(flags._[0], sessions), 'unarchive');
   if (cmd === 'delete') {
     const session = resolveSession(flags._[0], sessions);
     if (flags.file) return deleteSessionFile(session);
-    return runCodexCommand('delete', session, flags.force ? ['--force'] : []);
+    return runSourceSessionCommand(session, 'delete', flags.force ? ['--force'] : []);
   }
 
   usage();

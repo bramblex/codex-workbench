@@ -91,13 +91,18 @@ function commandShell() {
   try { fs.accessSync(shell, fs.constants.X_OK); return shell; } catch { return '/bin/sh'; }
 }
 
-function runArgv(argv, cwd, inherit) {
+function runArgv(argv, cwd, inherit, hooks = {}) {
   const shellCommand = `exec ${argv.map(shellQuote).join(' ')}`;
   const shell = commandShell();
   if (inherit) {
     const child = spawn(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
+    if (hooks.onChild) hooks.onChild(child);
     child.on('error', (err) => { console.error(`error: failed to start codex: ${err.message}`); process.exit(1); });
-    child.on('exit', (code, signal) => { if (signal) process.kill(process.pid, signal); process.exit(code || 0); });
+    child.on('exit', (code, signal) => {
+      if (hooks.onExit) hooks.onExit(code, signal);
+      if (signal) process.kill(process.pid, signal);
+      process.exit(code || 0);
+    });
     return undefined;
   }
   const result = spawnSync(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
@@ -107,10 +112,10 @@ function runArgv(argv, cwd, inherit) {
   return status;
 }
 
-function runCommand(command, session, args, inherit) {
+function runCommand(command, session, args, inherit, hooks) {
   const executable = resolveCodexBin();
   const argv = [executable, command, session.id, ...(args || [])];
-  return runArgv(argv, usableCwd(session.cwd), inherit);
+  return runArgv(argv, usableCwd(session.cwd), inherit, hooks);
 }
 
 function runNew(cwd, args, inherit) {
@@ -240,10 +245,10 @@ const COMMAND_MAP = {
   unarchive: 'unarchive',
 };
 
-function runSessionCommand(command, session, args, inherit) {
+function runSessionCommand(command, session, args, inherit, hooks) {
   const codexCmd = COMMAND_MAP[command];
   if (!codexCmd) throw new Error(`Unknown command for codex backend: ${command}`);
-  return runCommand(codexCmd, session, args, inherit);
+  return runCommand(codexCmd, session, args, inherit, hooks);
 }
 
 module.exports = {

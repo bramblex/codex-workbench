@@ -7,6 +7,7 @@ const { listServers } = require('../model/workbench-config');
 const { runCodexCommand, runNewCodexSession, usableCwd } = require('./codex-runner');
 const { runRemoteCwb, runRemoteCwbJson, runRemoteCwbJsonAsync } = require('./ssh-runner');
 const { getAvailableProviders } = require('../providers');
+const { acquireSessionLock, sessionLockInfo } = require('./session-locks');
 
 const LOCAL_SOURCE = {
   id: 'local',
@@ -28,13 +29,20 @@ function sourceKey(sourceId, id) {
 }
 
 function attachSource(session, source) {
-  return {
+  const sourced = {
     ...session,
     sourceId: source.id,
     sourceLabel: source.label,
     sourceType: source.type,
     sourceRemote: source.remote,
     sourceKey: sourceKey(source.id, session.id),
+  };
+  if (!source.remote) {
+    const lock = sessionLockInfo(sourced);
+    if (lock) sourced.open = true;
+  }
+  return {
+    ...sourced,
   };
 }
 
@@ -128,13 +136,34 @@ function listSourceBackends(source) {
     }));
 }
 
-function runSourceSessionCommand(session, command, args) {
+function guardedLocalSessionCommand(session, command, args, options = {}) {
+  if (command !== 'resume') return runCodexCommand(command, session, args, options.inherit);
+  const lock = acquireSessionLock(session, command, { force: options.force });
+  const hooks = options.inherit
+    ? {
+        onChild: (child) => lock.update({ pid: child.pid }),
+        onExit: () => lock.release(),
+      }
+    : null;
+  try {
+    const status = runCodexCommand(command, session, args, options.inherit, hooks);
+    if (!options.inherit) lock.release();
+    return status;
+  } catch (err) {
+    lock.release();
+    throw err;
+  }
+}
+
+function runSourceSessionCommand(session, command, args, options = {}) {
+  const inherit = Object.prototype.hasOwnProperty.call(options, 'inherit') ? options.inherit : false;
   if (!session.sourceRemote) {
-    return runCodexCommand(command, session, args);
+    return guardedLocalSessionCommand(session, command, args, { ...options, inherit });
   }
   const source = configuredSourceOrThrow(session.sourceId);
   const tty = command === 'resume' || command === 'fork';
-  const result = runRemoteCwb(source, [command, session.id, ...args], { tty });
+  const forceArgs = command === 'resume' && options.force ? ['--force'] : [];
+  const result = runRemoteCwb(source, [command, session.id, ...forceArgs, ...args], { tty });
   if (result.error) throw result.error;
   const status = resultStatus(result);
   process.exitCode = status;

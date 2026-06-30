@@ -17,9 +17,9 @@ const usableCwd = codex.usableCwd;
 /**
  * Run a CLI command against a session, routing to the correct provider backend.
  */
-function runCodexCommand(command, session, args, inherit) {
+function runCodexCommand(command, session, args, inherit, hooks) {
   const provider = providerForSession(session);
-  return provider.runCommand(command, session, args, inherit);
+  return provider.runCommand(command, session, args, inherit, hooks);
 }
 
 /**

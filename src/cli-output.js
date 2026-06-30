@@ -19,7 +19,7 @@ Usage:
   codex-workbench new [--cwd <dir>] [--backend <backend>] [prompt...]
   codex-workbench dirs [--cwd <dir>] [--json]
   codex-workbench mkdir [--cwd <dir>] <name> [--json]
-  codex-workbench resume <session> [prompt...]
+  codex-workbench resume <session> [--force] [prompt...]
   codex-workbench fork <session>
   codex-workbench archive <session>
   codex-workbench unarchive <session>
@@ -29,6 +29,7 @@ Environment:
   CWB_HOME              default: ~/.cwb
   CWB_META              default: $CWB_HOME/metadata.json
   CWB_CONFIG            default: $CWB_HOME/config.json
+  CWB_LOCKS_DIR         default: $CWB_HOME/locks
   CODEX_HOME            default: ~/.codex
   CODEX_SESSIONS_DIR    default: $CODEX_HOME/sessions
   CLAUDE_HOME           default: ~/.claude
@@ -68,7 +69,7 @@ function printList(sessions, opts = {}) {
     console.log(`\n${group.source ? `${group.source}: ` : ''}${group.cwd}`);
     for (const session of group.sessions) {
       const label = session.name || truncate(session.first || session.last || '(no prompt)', 52);
-      const flags = [session.backend || '', session.archived ? 'archived' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
+      const flags = [session.backend || '', session.open ? 'open' : '', session.archived ? 'archived' : '', session.note ? 'note' : ''].filter(Boolean).join(',');
       console.log(`  ${shortId(session.id)}  ${localTime(session.updatedAt)}  ${String(session.turns).padStart(2)} turns  ${flags ? `[${flags}] ` : ''}${label}`);
     }
   }

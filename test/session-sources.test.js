@@ -62,6 +62,7 @@ exit 0
 fs.chmodSync(path.join(binDir, 'codex'), 0o755);
 
 process.env.CODEX_HOME = codexHome;
+process.env.CWB_LOCKS_DIR = path.join(tmp, '.cwb', 'locks');
 process.env.CODEX_WORKBENCH_CONFIG = configPath;
 process.env.CODEX_WORKBENCH_META = path.join(codexHome, 'meta.json');
 process.env.PI_CODING_AGENT_DIR = path.join(tmp, '.pi', 'agent');

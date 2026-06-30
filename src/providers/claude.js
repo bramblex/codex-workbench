@@ -202,13 +202,18 @@ function parseSession(file) {
   };
 }
 
-function runArgv(argv, cwd, inherit) {
+function runArgv(argv, cwd, inherit, hooks = {}) {
   const shellCommand = `exec ${argv.map(shellQuote).join(' ')}`;
   const shell = commandShell();
   if (inherit) {
     const child = spawn(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
+    if (hooks.onChild) hooks.onChild(child);
     child.on('error', (err) => { console.error(`error: failed to start claude: ${err.message}`); process.exit(1); });
-    child.on('exit', (code, signal) => { if (signal) process.kill(process.pid, signal); process.exit(code || 0); });
+    child.on('exit', (code, signal) => {
+      if (hooks.onExit) hooks.onExit(code, signal);
+      if (signal) process.kill(process.pid, signal);
+      process.exit(code || 0);
+    });
     return undefined;
   }
   const result = spawnSync(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
@@ -218,17 +223,17 @@ function runArgv(argv, cwd, inherit) {
   return status;
 }
 
-function runSessionCommand(command, session, args, inherit) {
+function runSessionCommand(command, session, args, inherit, hooks) {
   const executable = resolveClaudeBin();
   const cwd = usableCwd(session.cwd);
   switch (command) {
     case 'resume': {
       const argv = [executable, '--resume', session.id];
       if (args && args.length) argv.push(args.join(' '));
-      return runArgv(argv, cwd, inherit);
+      return runArgv(argv, cwd, inherit, hooks);
     }
     case 'fork': {
-      return runArgv([executable, '--resume', session.id, '--fork-session'], cwd, inherit);
+      return runArgv([executable, '--resume', session.id, '--fork-session'], cwd, inherit, hooks);
     }
     case 'delete': {
       fs.unlinkSync(session.file);

@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const cli = path.join(root, 'src', 'cli.js');
@@ -37,6 +37,9 @@ fs.mkdirSync(piSessionsDir, { recursive: true });
 fs.mkdirSync(fakeBinDir, { recursive: true });
 fs.writeFileSync(fakeCodex, `#!/bin/sh
 printf '%s\\n' "$@" > "${fakeCodexLog}"
+if [ "$CWB_TEST_SLEEP" = "1" ]; then
+  sleep 10
+fi
 exit 0
 `);
 fs.chmodSync(fakeCodex, 0o755);
@@ -202,17 +205,30 @@ fs.writeFileSync(piSessionFile, [
 function run(args, extraEnv = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
     cwd: root,
-    env: {
-      ...process.env,
-      CODEX_HOME: codexHome,
-      CLAUDE_HOME: claudeHome,
-      CODEX_WORKBENCH_META: path.join(codexHome, 'meta.json'),
-      PI_CODING_AGENT_DIR: path.join(tmp, '.pi', 'agent'),
-      OPENCODE_DB: path.join(tmp, 'missing-opencode.db'),
-      ...extraEnv,
-    },
+    env: runEnv(extraEnv),
     encoding: 'utf8',
   });
+}
+
+function runEnv(extraEnv = {}) {
+  return {
+    ...process.env,
+    CODEX_HOME: codexHome,
+    CWB_LOCKS_DIR: path.join(tmp, '.cwb', 'locks'),
+    CLAUDE_HOME: claudeHome,
+    CODEX_WORKBENCH_META: path.join(codexHome, 'meta.json'),
+    PI_CODING_AGENT_DIR: path.join(tmp, '.pi', 'agent'),
+    OPENCODE_DB: path.join(tmp, 'missing-opencode.db'),
+    ...extraEnv,
+  };
+}
+
+function waitFor(predicate, label) {
+  const started = Date.now();
+  while (Date.now() - started < 3000) {
+    if (predicate()) return;
+  }
+  throw new Error(`Timed out waiting for ${label}`);
 }
 
 let result = run(['list', '--json']);
@@ -407,6 +423,34 @@ assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n
   'fork',
   'abcdef1234567890',
 ]);
+
+fs.rmSync(fakeCodexLog, { force: true });
+const heldResume = spawn(process.execPath, [cli, 'resume', 'abcdef'], {
+  cwd: root,
+  env: runEnv({ CODEX_BIN: fakeCodex, CWB_TEST_SLEEP: '1' }),
+  stdio: 'ignore',
+});
+try {
+  waitFor(() => {
+    const listResult = run(['list', '--json'], { CODEX_BIN: fakeCodex });
+    if (listResult.status !== 0) return false;
+    const listed = JSON.parse(listResult.stdout).find((session) => session.id === 'abcdef1234567890');
+    return listed && listed.open;
+  }, 'open session lock');
+
+  result = run(['resume', 'abcdef'], { CODEX_BIN: fakeCodex });
+  assert.strictEqual(result.status, 1);
+  assert.match(result.stderr, /Session is already open/);
+
+  result = run(['resume', 'abcdef', '--force'], { CODEX_BIN: fakeCodex });
+  assert.strictEqual(result.status, 0, result.stderr);
+  assert.deepStrictEqual(fs.readFileSync(fakeCodexLog, 'utf8').trim().split(/\r?\n/), [
+    'resume',
+    'abcdef1234567890',
+  ]);
+} finally {
+  try { process.kill(heldResume.pid, 'SIGKILL'); } catch { /* ignore */ }
+}
 
 fs.rmSync(fakeOpenCodeLog, { force: true });
 result = run(['resume', 'opencode123', 'continue here'], {

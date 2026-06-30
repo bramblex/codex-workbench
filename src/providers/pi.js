@@ -238,13 +238,18 @@ function lastAssistantText(messages) {
 // CLI execution
 // ---------------------------------------------------------------------------
 
-function runArgv(argv, cwd, inherit) {
+function runArgv(argv, cwd, inherit, hooks = {}) {
   const shellCommand = `exec ${argv.map(shellQuote).join(' ')}`;
   const shell = commandShell();
   if (inherit) {
     const child = spawn(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
+    if (hooks.onChild) hooks.onChild(child);
     child.on('error', (err) => { console.error(`error: failed to start pi: ${err.message}`); process.exit(1); });
-    child.on('exit', (code, signal) => { if (signal) process.kill(process.pid, signal); process.exit(code || 0); });
+    child.on('exit', (code, signal) => {
+      if (hooks.onExit) hooks.onExit(code, signal);
+      if (signal) process.kill(process.pid, signal);
+      process.exit(code || 0);
+    });
     return undefined;
   }
   const result = spawnSync(shell, ['-lc', shellCommand], { stdio: 'inherit', cwd, env: process.env });
@@ -255,7 +260,7 @@ function runArgv(argv, cwd, inherit) {
 }
 
 // pi CLI commands mapping
-function runSessionCommand(command, session, args, inherit) {
+function runSessionCommand(command, session, args, inherit, hooks) {
   const executable = resolvePiBin();
   const cwd = usableCwd(session.cwd);
 
@@ -264,12 +269,12 @@ function runSessionCommand(command, session, args, inherit) {
       // pi --session <file> [args...]
       let argv = [executable, '--session', session.file];
       if (args && args.length) argv.push('-p', args.join(' '));
-      return runArgv(argv, cwd, inherit);
+      return runArgv(argv, cwd, inherit, hooks);
     }
     case 'fork': {
       // pi --fork <file>
       const argv = [executable, '--fork', session.file];
-      return runArgv(argv, cwd, inherit);
+      return runArgv(argv, cwd, inherit, hooks);
     }
     case 'delete': {
       fs.unlinkSync(session.file);
